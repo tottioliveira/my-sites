@@ -1,0 +1,1137 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head><body>
+<title>Totti's Liveries</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#E7EAE7; --surface:#F6F7F5; --raised:#FFFFFF; --ink:#141916; --muted:#5B655F; --faint:#8A938D;
+  --line:#CFD5D0; --line-strong:#B4BCB6; --accent:#2B7A4B; --accent-ink:#FFFFFF; --accent-soft:#D8EADF;
+  --stage:#1A1E1C; --stage-line:#2A302D; --hist:#3C4640;
+  --zone:#C9D3E8; --zone-ink:#3C4E78;
+  --warn:#A8620F; --bad:#B23A32; --good:#2B7A4B;
+  --f-display:"Chakra Petch","Segoe UI",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D100F; --surface:#141816; --raised:#1B201D; --ink:#E3E8E4; --muted:#8F9A93; --faint:#66706A;
+    --line:#252B28; --line-strong:#353D38; --accent:#5DBE84; --accent-ink:#0B1A11; --accent-soft:#1D3326;
+    --stage:#090B0A; --stage-line:#1E2320; --hist:#9AA59E;
+    --zone:#232C42; --zone-ink:#A9B8E0;
+    --warn:#E0A04A; --bad:#EB6F66; --good:#5DBE84;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D100F; --surface:#141816; --raised:#1B201D; --ink:#E3E8E4; --muted:#8F9A93; --faint:#66706A;
+  --line:#252B28; --line-strong:#353D38; --accent:#5DBE84; --accent-ink:#0B1A11; --accent-soft:#1D3326;
+  --stage:#090B0A; --stage-line:#1E2320; --hist:#9AA59E;
+  --zone:#232C42; --zone-ink:#A9B8E0;
+  --warn:#E0A04A; --bad:#EB6F66; --good:#5DBE84;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.label{font-family:var(--f-display);font-weight:600;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+/* ---------- top bar ---------- */
+.topbar{display:flex;align-items:center;gap:12px 24px;flex-wrap:wrap;padding:0 24px;border-bottom:1px solid var(--line);background:var(--surface)}
+.brand{display:flex;align-items:center;gap:10px;padding-block:14px}
+.brand h1{margin:0;font-family:var(--f-display);font-weight:600;font-size:20px;letter-spacing:.02em;white-space:nowrap}
+.brand h1 b{color:var(--accent);font-weight:600}
+.tabs{display:flex;gap:4px;align-self:stretch}
+.tab{border:0;background:none;padding:0 14px;cursor:pointer;font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);box-shadow:inset 0 -2px 0 transparent;min-height:48px}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}
+.topbar .spacer{flex:1}
+.pipeline{display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:var(--faint);font-family:var(--f-mono);font-size:11.5px;padding-block:10px}
+.pipeline span{padding:2px 7px;border:1px solid var(--line);border-radius:4px;color:var(--muted)}
+.pipeline i{font-style:normal}
+@media (max-width:520px){.topbar{padding:0 16px}.brand{padding-block:10px 4px}.tab{min-height:40px;padding:0 10px}}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:292px minmax(0,1fr);gap:16px;padding:16px 24px 32px;max-width:1500px;margin:0 auto}
+@media (max-width:980px){.shell{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:520px){.shell{padding:12px 16px 28px}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.panel-head{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+
+/* ---------- queue ---------- */
+.queue{display:flex;flex-direction:column;min-height:0;align-self:start}
+.drop{margin:14px;border:1.5px dashed var(--line-strong);border-radius:var(--r);padding:22px 14px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;display:grid;gap:6px;justify-items:center}
+.drop:hover,body.dragging .shell:not([hidden]) .drop{border-color:var(--accent);background:var(--accent-soft)}
+.drop svg{color:var(--accent)}
+.drop strong{font-weight:600}
+.drop small{color:var(--muted);font-size:12px}
+.files{list-style:none;margin:0;padding:0 8px 10px;display:grid;gap:2px;max-height:52vh;overflow:auto}
+.file{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:8px;border-radius:5px;cursor:pointer;border:1px solid transparent}
+.file:hover{background:var(--raised)}
+.file.active{background:var(--raised);border-color:var(--line-strong)}
+.file .thumb{width:36px;height:36px;border-radius:3px;background:var(--stage);display:block}
+.file .meta{min-width:0}
+.file .name{font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file .sub{font-family:var(--f-mono);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file .sub .err{color:var(--bad)}
+.file .bar{height:2px;background:var(--line);border-radius:2px;margin-top:5px;overflow:hidden}
+.file .bar i{display:block;height:100%;background:var(--accent);width:0}
+.file .side{display:flex;align-items:center;gap:4px}
+.chip{font-family:var(--f-mono);font-size:10px;letter-spacing:.04em;padding:1px 6px;border-radius:3px;border:1px solid var(--line-strong);color:var(--muted);text-transform:uppercase}
+.chip.ex{border-color:var(--warn);color:var(--warn)}
+.icon-btn{width:26px;height:26px;display:grid;place-items:center;border:0;background:transparent;border-radius:4px;color:var(--faint);cursor:pointer}
+.icon-btn:hover{background:var(--line);color:var(--ink)}
+.check{appearance:none;width:16px;height:16px;border:1.5px solid var(--line-strong);border-radius:3px;margin:0;display:grid;place-items:center;cursor:pointer;background:var(--raised);flex:none}
+.check:checked{background:var(--accent);border-color:var(--accent)}
+.check:checked::after{content:"";width:8px;height:4px;border-left:2px solid var(--accent-ink);border-bottom:2px solid var(--accent-ink);transform:translateY(-1px) rotate(-45deg)}
+.check:disabled{opacity:.4}
+.queue-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.linkish{border:0;background:none;padding:0;color:var(--accent);cursor:pointer;font-size:12px;font-weight:500}
+.empty-list{padding:4px 16px 16px;color:var(--faint);font-size:12.5px}
+
+/* ---------- work area ---------- */
+.work{display:grid;gap:16px;min-width:0;align-content:start}
+.panes{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--stage-line);border-radius:0 0 var(--r) var(--r);overflow:hidden}
+@media (max-width:640px){.panes{grid-template-columns:1fr}}
+.pane{position:relative;background:var(--stage);aspect-ratio:1/1;max-height:62vh;width:100%;display:grid;place-items:center;overflow:hidden}
+.pane canvas{width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+.pane canvas.panning{cursor:grabbing}
+.zoombar{display:flex;align-items:center;gap:2px;border:1px solid var(--line-strong);border-radius:5px;background:var(--raised);padding:2px}
+.zoombar button{border:0;background:none;min-width:28px;height:26px;padding:0 8px;border-radius:3px;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted)}
+.zoombar button:hover{background:var(--line);color:var(--ink)}
+.zoombar output{font-family:var(--f-mono);font-size:11.5px;min-width:52px;text-align:center;color:var(--ink);font-variant-numeric:tabular-nums}
+.viewer-foot{display:flex;justify-content:space-between;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:8px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--faint)}
+.pane .tag{position:absolute;left:10px;top:10px;font-family:var(--f-display);font-weight:600;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#D9E0DB;background:rgba(9,11,10,.72);padding:3px 8px;border-radius:3px;pointer-events:none}
+.pane .tag em{font-style:normal;color:#7FD3A0}
+.pane .placeholder{position:absolute;inset:0;display:grid;place-items:center;color:#6E7872;font-size:13px;text-align:center;padding:16px}
+.readout{display:flex;gap:18px;flex-wrap:wrap;align-items:center;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.readout b{color:var(--ink);font-weight:500}
+.fileinfo{display:flex;gap:10px;align-items:baseline;min-width:0;flex-wrap:wrap}
+.fileinfo .nm{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.fileinfo .fmt{font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
+.note{font-size:12px;color:var(--warn)}
+.controls{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px}
+@media (max-width:1180px){.controls{grid-template-columns:minmax(0,1fr)}}
+.body{padding:14px}
+
+/* ---------- shared controls ---------- */
+.presets{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line-strong);background:var(--raised);padding:6px 12px;border-radius:5px;cursor:pointer;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn:hover{border-color:var(--ink)}
+.btn .mono{font-size:11.5px;color:var(--muted)}
+.btn.on{border-color:var(--accent);background:var(--accent-soft)}
+.btn.on .mono{color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);padding:9px 16px;font-size:14px;justify-content:center}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.field{display:grid;gap:4px}
+.field span{font-size:11px;color:var(--muted)}
+.field input{width:100%;padding:6px 8px;border:1px solid var(--line-strong);border-radius:4px;background:var(--raised);font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:13px}
+.field input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+.stack{display:grid;gap:18px}
+.sub-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;user-select:none}
+.switch input{appearance:none;width:30px;height:17px;border-radius:9px;background:var(--line-strong);position:relative;cursor:pointer;margin:0;transition:background .15s;flex:none}
+.switch input::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:var(--raised);transition:transform .15s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{transform:translateX(13px)}
+
+/* ---------- levels ---------- */
+.hist-wrap{position:relative;padding:0 9px}
+.hist{display:block;width:100%;height:132px;background:var(--raised);border:1px solid var(--line);border-radius:4px 4px 0 0}
+.track.grad{height:10px;border:1px solid var(--line);border-top:0;background:linear-gradient(90deg,#000,#fff)}
+.track.out-grad{height:10px;border:1px solid var(--line);border-radius:3px;background:linear-gradient(90deg,#000,#fff)}
+.handles{position:relative;height:16px}
+.h{position:absolute;top:0;width:18px;height:16px;margin-left:-9px;border:0;padding:0;background:none;cursor:ew-resize;touch-action:none}
+.h::before{content:"";position:absolute;inset:0;clip-path:polygon(50% 0,100% 100%,0 100%);background:var(--ink)}
+.h::after{content:"";position:absolute;inset:3px 4px 1.5px;clip-path:polygon(50% 0,100% 100%,0 100%);background:var(--hc)}
+.h.black{--hc:#000}.h.gray{--hc:#8a8a8a}.h.white{--hc:#fff}
+.h:focus-visible{outline:none}
+.h:focus-visible::before{background:var(--accent)}
+.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}
+.nums.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+/* ---------- normal strength ---------- */
+.fill-row{display:flex;gap:12px;align-items:center;padding:10px 12px;background:var(--raised);border:1px solid var(--line);border-radius:5px}
+.swatch{width:34px;height:34px;border-radius:4px;background:rgb(128,128,255);flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.fill-row div{display:grid;gap:1px;min-width:0}
+.fill-row b{font-weight:600;font-size:13px}
+.fill-row small{color:var(--muted);font-size:12px}
+.op-scale{position:relative;padding:0 9px}
+.zones{position:relative;height:22px}
+.zone{position:absolute;top:0;bottom:0;background:var(--zone);color:var(--zone-ink);font-size:10.5px;font-weight:600;display:flex;align-items:center;justify-content:center;border-radius:3px;white-space:nowrap;overflow:hidden;padding:0 4px}
+.op-range{width:100%;margin:8px 0 0;appearance:none;height:18px;background:transparent;cursor:pointer}
+.op-range::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--line-strong),rgb(128,128,255))}
+.op-range::-moz-range-track{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--line-strong),rgb(128,128,255))}
+.op-range::-webkit-slider-thumb{appearance:none;width:18px;height:18px;border-radius:50%;background:var(--raised);border:2px solid var(--ink);margin-top:-6px}
+.op-range::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--raised);border:2px solid var(--ink)}
+.ticks{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:10.5px;color:var(--faint);margin-top:2px}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.stat{padding:10px 12px;border:1px solid var(--line);border-radius:5px;background:var(--raised);display:grid;gap:2px}
+.stat span{font-size:11px;color:var(--muted)}
+.stat b{font-family:var(--f-mono);font-weight:500;font-size:15px;font-variant-numeric:tabular-nums}
+.stat b i{font-style:normal;color:var(--faint)}
+.op-row{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:12px;align-items:end}
+
+/* ---------- export ---------- */
+.export .body{display:grid;gap:16px;align-content:start}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line-strong);border-radius:5px;overflow:hidden}
+.seg button{border:0;background:var(--raised);padding:7px 8px;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line-strong)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}
+.opt{display:grid;gap:6px}
+.preview-name{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);overflow-wrap:anywhere}
+.dest{font-size:12px;color:var(--muted)}
+.dest b{color:var(--ink);font-weight:500}
+.log{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);min-height:1.5em;overflow-wrap:anywhere}
+.log.ok{color:var(--good)}.log.bad{color:var(--bad)}
+.progress{height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="topbar">
+  <div class="brand"><h1>Totti's <b>Liveries</b></h1></div>
+  <nav class="tabs" role="tablist" aria-label="Tools">
+    <button class="tab" role="tab" id="tab-rough" data-tab="rough" aria-selected="true" type="button">Roughmap</button>
+    <button class="tab" role="tab" id="tab-normal" data-tab="normal" aria-selected="false" type="button">Normal map</button>
+  </nav>
+  <div class="spacer"></div>
+  <div class="pipeline" id="pipeline" aria-label="Processing steps"></div>
+</header>
+
+<main class="shell" data-tool="rough" role="tabpanel" aria-labelledby="tab-rough"></main>
+<main class="shell" data-tool="normal" role="tabpanel" aria-labelledby="tab-normal" hidden></main>
+
+<script>
+(() => {
+"use strict";
+/* ============================================================
+   DDS decoding → RGBA per 4×4 block, written out as G-only or RGBA
+   ============================================================ */
+const P2="a01100110011001ba00100010001000ba11101110111011ba00100110011011ba00000010001001ba01101110111111ba00100110111111ba00000010011011ba00000000001001ba01101111111111ba00000010111111ba00000000001011ba00101111111111ba00000001111111ba00011111111111ba00000000000111ba00010001110111ba1b1000100000000a0000000b0001110a1b1001100010000a0b1000100000000a0001000b1001110a0000000b0001100a11100110011000ba0b1000100010000a0001000b0001100a1b0011001100110a0b1011001101100a0010111b1101000a0001111b1110000a1b1000110001110a0b1100110011100a10101010101010ba00011110000111ba10110b001011010a0110011b1001100a0b1110000111100a1010101b0101010a11010010110100ba10110101010010ba1b1001111001110a0010011b1001000a0b1001001001100a0b1101111011100a1b0100110010110a01111001100001ba11001101001100ba00001b001100000a10011b001000000a0b0011100100000a00000b001110010a0000100b1100100a11011001001001ba01101101100100ba1b0001110011100a0b1100111000110a11011001100100ba11000110011100ba11111101000000ba00110001110011ba00011110011001ba0b1001111110000a0b0001011101110a10001000111011b";
+const P3="a01b00110221222ca00b0011c2112221a0002001c211221ba22c00220011011ba0000000b122112ca01b00110022002ca02c00221111111ba0110011c211221ba0000000b111222ca0001111b111222ca00011b12222222ca01200b20012001ca11201b20112011ca1220b220122012ca01b01121122122ca01b2001c2002220a00b00110112112ca11b0011c0012200a0001122b122112ca02c00220022111ba11b01110222022ca00b0001c2212221a00000b10122012ca0001100c2b02210a12c0b2200110000a0120012b122222ca11012c1b2210110a00001b012c11221a0221102b102002ca1100b102002222ca011012201c2001ba0002000c211222ba0000002b122122ca22c00220012001ba01b00120022022ca1200b2001c00120a00011b122c20000a1201201c0b20120a1202012bc010120a011220011c2001ba01111c22200001ba10b01012222222ca0000000c121212ba0221b220022112ca02c00110022001ba22012c10220122ba10122c22222010ba0002121c121212ba10b01010101222ca22c01110222011ba0021b120002111ca0002b122112211ca2220b110111022ca0021112b112000ca1100b100110222ca000000021b2211ca1100b102222222ca022001100b1002ca0221122b122002ca000000000002b1ca00c00010002000ba22212220222b22ca10b22222222222ca11b2011c2012220";
+const PT2 = new Uint8Array(1024), PT3 = new Uint8Array(1024);
+for (let i = 0; i < 1024; i++) for (const [s, t] of [[P2, PT2], [P3, PT3]]) { const k = "abc".indexOf(s[i]); t[i] = k >= 0 ? (k | 0x80) : (+s[i]); }
+const W2 = [0,21,43,64], W3 = [0,9,18,27,37,46,55,64], W4 = [0,4,9,13,17,21,26,30,34,38,43,47,51,55,60,64];
+const CB7 = [4,6,5,7,5,7,7,5], AB7 = [0,0,0,0,6,8,7,5];
+const EP = new Int32Array(24), IDX = new Uint8Array(16);
+let bp = 0;
+function rb(b, o, n) { let v = 0; for (let i = 0; i < n; i++, bp++) v |= ((b[o + (bp >> 3)] >> (bp & 7)) & 1) << i; return v; }
+const ip = (e0, e1, w, i) => ((64 - w[i]) * e0 + w[i] * e1 + 32) >> 6;
+
+function bc7(b, o, B) {
+  bp = 0;
+  let mode = 0; while (mode < 8 && rb(b, o, 1) === 0) mode++;
+  if (mode >= 8) { B.fill(0); return; }
+  let np = 1, part = 0, rot = 0, isb = 0;
+  if (mode === 0 || mode === 1 || mode === 2 || mode === 3 || mode === 7) { np = (mode === 0 || mode === 2) ? 3 : 2; part = rb(b, o, mode === 0 ? 4 : 6); }
+  const ne = np * 2;
+  if (mode === 4 || mode === 5) { rot = rb(b, o, 2); if (mode === 4) isb = rb(b, o, 1); }
+  for (let c = 0; c < 3; c++) for (let j = 0; j < ne; j++) EP[j * 4 + c] = rb(b, o, CB7[mode]);
+  if (AB7[mode]) for (let j = 0; j < ne; j++) EP[j * 4 + 3] = rb(b, o, AB7[mode]);
+  const hasP = (0b11001011 >> mode) & 1;
+  if (hasP) {
+    for (let i = 0; i < ne * 4; i++) EP[i] <<= 1;
+    if (mode === 1) {
+      const p0 = rb(b, o, 1), p1 = rb(b, o, 1);
+      for (let k = 0; k < 3; k++) { EP[k] |= p0; EP[4 + k] |= p0; EP[8 + k] |= p1; EP[12 + k] |= p1; }
+    } else {
+      for (let i = 0; i < ne; i++) { const p = rb(b, o, 1); for (let k = 0; k < 4; k++) EP[i * 4 + k] |= p; }
+    }
+  }
+  for (let i = 0; i < ne; i++) {
+    let j = CB7[mode] + hasP;
+    for (let k = 0; k < 3; k++) { const e = EP[i * 4 + k] << (8 - j); EP[i * 4 + k] = e | (e >> j); }
+    if (AB7[mode]) { j = AB7[mode] + hasP; const e = EP[i * 4 + 3] << (8 - j); EP[i * 4 + 3] = e | (e >> j); }
+    else EP[i * 4 + 3] = 255;
+  }
+  const ib = (mode === 0 || mode === 1) ? 3 : (mode === 6 ? 4 : 2);
+  const ib2 = mode === 4 ? 3 : (mode === 5 ? 2 : 0);
+  const w1 = ib === 2 ? W2 : ib === 3 ? W3 : W4, w2 = ib2 === 2 ? W2 : W3;
+  const tbl = np === 3 ? PT3 : PT2;
+  for (let p = 0; p < 16; p++) {
+    const ps = np === 1 ? (p ? 0 : 128) : tbl[part * 16 + p];
+    IDX[p] = rb(b, o, (ps & 0x80) ? ib - 1 : ib);
+  }
+  for (let p = 0; p < 16; p++) {
+    const s = np === 1 ? 0 : (tbl[part * 16 + p] & 3), e0 = s * 8, e1 = s * 8 + 4, idx = IDX[p];
+    let cw = w1, ci = idx, aw = w1, ai = idx;
+    if (ib2) {
+      const idx2 = rb(b, o, p ? ib2 : ib2 - 1);
+      if (!isb) { aw = w2; ai = idx2; } else { cw = w2; ci = idx2; }
+    }
+    let r = ip(EP[e0], EP[e1], cw, ci), g = ip(EP[e0 + 1], EP[e1 + 1], cw, ci), bl = ip(EP[e0 + 2], EP[e1 + 2], cw, ci), a = ip(EP[e0 + 3], EP[e1 + 3], aw, ai), t;
+    if (rot === 1) { t = a; a = r; r = t; } else if (rot === 2) { t = a; a = g; g = t; } else if (rot === 3) { t = a; a = bl; bl = t; }
+    const q = p * 4; B[q] = r; B[q + 1] = g; B[q + 2] = bl; B[q + 3] = a;
+  }
+}
+
+const PAL = new Uint8Array(16);
+function bc1(b, o, B, fourColor) {
+  const c0 = b[o] | (b[o + 1] << 8), c1 = b[o + 2] | (b[o + 3] << 8);
+  const ex = (c, s, bits) => { const v = (c >> s) & ((1 << bits) - 1); return bits === 5 ? (v << 3) | (v >> 2) : (v << 2) | (v >> 4); };
+  const r0 = ex(c0, 11, 5), g0 = ex(c0, 5, 6), b0 = ex(c0, 0, 5), r1 = ex(c1, 11, 5), g1 = ex(c1, 5, 6), b1 = ex(c1, 0, 5);
+  PAL.set([r0, g0, b0, 255, r1, g1, b1, 255]);
+  if (fourColor || c0 > c1) {
+    PAL.set([(2 * r0 + r1 + 1) / 3 | 0, (2 * g0 + g1 + 1) / 3 | 0, (2 * b0 + b1 + 1) / 3 | 0, 255, (r0 + 2 * r1 + 1) / 3 | 0, (g0 + 2 * g1 + 1) / 3 | 0, (b0 + 2 * b1 + 1) / 3 | 0, 255], 8);
+  } else PAL.set([(r0 + r1 + 1) >> 1, (g0 + g1 + 1) >> 1, (b0 + b1 + 1) >> 1, 255, 0, 0, 0, 0], 8);
+  const idx = (b[o + 4] | (b[o + 5] << 8) | (b[o + 6] << 16) | (b[o + 7] << 24)) >>> 0;
+  for (let p = 0; p < 16; p++) { const k = ((idx >>> (2 * p)) & 3) * 4, q = p * 4; B[q] = PAL[k]; B[q + 1] = PAL[k + 1]; B[q + 2] = PAL[k + 2]; if (!fourColor) B[q + 3] = PAL[k + 3]; }
+}
+const P8 = new Uint8Array(8);
+function bc4(b, o, B, c, signed) {
+  const e0 = b[o], e1 = b[o + 1];
+  if (signed) {
+    const s0 = Math.max(-127, (e0 << 24) >> 24), s1 = Math.max(-127, (e1 << 24) >> 24), pal = [s0, s1];
+    if (s0 > s1) for (let k = 1; k < 7; k++) pal.push(((7 - k) * s0 + k * s1) / 7);
+    else { for (let k = 1; k < 5; k++) pal.push(((5 - k) * s0 + k * s1) / 5); pal.push(-127, 127); }
+    for (let i = 0; i < 8; i++) P8[i] = Math.round((pal[i] + 127) * 255 / 254);
+  } else {
+    P8[0] = e0; P8[1] = e1;
+    if (e0 > e1) for (let k = 1; k < 7; k++) P8[k + 1] = Math.round(((7 - k) * e0 + k * e1) / 7);
+    else { for (let k = 1; k < 5; k++) P8[k + 1] = Math.round(((5 - k) * e0 + k * e1) / 5); P8[6] = 0; P8[7] = 255; }
+  }
+  const lo = b[o + 2] | (b[o + 3] << 8) | (b[o + 4] << 16), hi = b[o + 5] | (b[o + 6] << 8) | (b[o + 7] << 16);
+  for (let p = 0; p < 8; p++) B[p * 4 + c] = P8[(lo >> (3 * p)) & 7];
+  for (let p = 0; p < 8; p++) B[(p + 8) * 4 + c] = P8[(hi >> (3 * p)) & 7];
+}
+function bc2Alpha(b, o, B) { for (let p = 0; p < 16; p++) { const v = (b[o + (p >> 1)] >> ((p & 1) * 4)) & 15; B[p * 4 + 3] = v * 17; } }
+/* rebuild Z for two-channel normals */
+const ZLUT = (() => { const t = new Uint8Array(65536); for (let r = 0; r < 256; r++) for (let g = 0; g < 256; g++) { const x = r / 127.5 - 1, y = g / 127.5 - 1, z = Math.sqrt(Math.max(0, 1 - x * x - y * y)); t[r * 256 + g] = Math.round((z * .5 + .5) * 255); } return t; })();
+function reconZ(B) { for (let p = 0; p < 16; p++) { const q = p * 4; B[q + 2] = ZLUT[B[q] * 256 + B[q + 1]]; B[q + 3] = 255; } }
+
+const DXGI_NAMES = {70:"BC1",71:"BC1",72:"BC1 sRGB",73:"BC2",74:"BC2",75:"BC2 sRGB",76:"BC3",77:"BC3",78:"BC3 sRGB",79:"BC4",80:"BC4",81:"BC4 signed",82:"BC5",83:"BC5",84:"BC5 signed",97:"BC7",98:"BC7",99:"BC7 sRGB",27:"RGBA8",28:"RGBA8",29:"RGBA8 sRGB",87:"BGRA8",88:"BGRX8",90:"BGRA8",91:"BGRA8 sRGB",92:"BGRX8",93:"BGRX8 sRGB",61:"R8",49:"RG8",65:"A8",94:"BC6H",95:"BC6H",96:"BC6H"};
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+/* want: "g" → Uint8Array(w*h) green channel · "rgba" → Uint8Array(w*h*4) */
+async function decodeDDS(buf, want, onProgress) {
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  if (buf.byteLength < 128 || dv.getUint32(0, true) !== 0x20534444) throw new Error("Not a DDS file (missing 'DDS ' header)");
+  const h = dv.getUint32(12, true), w = dv.getUint32(16, true);
+  const pfFlags = dv.getUint32(80, true), fourCC = String.fromCharCode(u8[84], u8[85], u8[86], u8[87]), bits = dv.getUint32(88, true);
+  const masks = [92, 96, 100, 104].map(o => dv.getUint32(o, true));
+  let off = 128, kind = null, fmt = "", note = "", recon = false, gray = false;
+  if (pfFlags & 4) {
+    if (fourCC === "DX10") {
+      const dx = dv.getUint32(128, true); off = 148; fmt = DXGI_NAMES[dx] || ("DXGI " + dx);
+      if (dx >= 70 && dx <= 72) kind = "bc1"; else if (dx >= 73 && dx <= 75) kind = "bc2";
+      else if (dx >= 76 && dx <= 78) kind = "bc3"; else if (dx === 79 || dx === 80) kind = "bc4";
+      else if (dx === 81) kind = "bc4s"; else if (dx === 82 || dx === 83) kind = "bc5";
+      else if (dx === 84) kind = "bc5s"; else if (dx >= 97 && dx <= 99) kind = "bc7";
+      else if (dx >= 27 && dx <= 29) kind = { bpp: 4, idx: [0, 1, 2, 3] };
+      else if (dx === 87 || dx === 90 || dx === 91) kind = { bpp: 4, idx: [2, 1, 0, 3] };
+      else if (dx === 88 || dx === 92 || dx === 93) kind = { bpp: 4, idx: [2, 1, 0, -1] };
+      else if (dx === 49) { kind = { bpp: 2, idx: [0, 1, -1, -1] }; recon = true; }
+      else if (dx === 61 || dx === 65) { kind = { bpp: 1, idx: [0, 0, 0, -1] }; gray = true; }
+    } else {
+      fmt = fourCC.replace(/\0/g, "");
+      if (fourCC === "DXT1") kind = "bc1";
+      else if (fourCC === "DXT2" || fourCC === "DXT3") kind = "bc2";
+      else if (fourCC === "DXT4" || fourCC === "DXT5") kind = "bc3";
+      else if (fourCC === "ATI1" || fourCC === "BC4U") kind = "bc4";
+      else if (fourCC === "BC4S") kind = "bc4s";
+      else if (fourCC === "ATI2" || fourCC === "BC5U") kind = "bc5";
+      else if (fourCC === "BC5S") kind = "bc5s";
+      else if (fourCC.charCodeAt(0) < 32 || fourCC.charCodeAt(1) === 0) fmt = "D3DFMT " + dv.getUint32(84, true);
+    }
+  } else if (pfFlags & 0x40) {
+    fmt = bits + "-bit RGB"; kind = { bpp: bits / 8, mask: [masks[0], masks[1], masks[2], (pfFlags & 1) ? masks[3] : 0] };
+  } else if (pfFlags & 0x20000) {
+    fmt = bits + "-bit luminance"; gray = true;
+    kind = { bpp: bits / 8, mask: [masks[0] || 0xff, masks[0] || 0xff, masks[0] || 0xff, (pfFlags & 1) ? masks[3] : 0] };
+  }
+  if (kind === "bc4" || kind === "bc4s") gray = true;
+  if (kind === "bc5" || kind === "bc5s") recon = true;
+  if (gray) note = "Single-channel texture — using its only channel.";
+  if (recon) note = want === "rgba" ? "Two-channel normal map — blue rebuilt from red/green." : "";
+  if (!kind) throw new Error(`Unsupported format ${fmt || "(unknown)"}. Supported: DXT1/3/5, BC1–BC5, BC7 and uncompressed 8-bit.`);
+  if (!w || !h) throw new Error("DDS reports zero width or height");
+
+  const G = want === "g", out = new Uint8Array(w * h * (G ? 1 : 4));
+  const B = new Uint8Array(64);
+  let t = performance.now();
+  if (typeof kind === "string") {
+    const bs = (kind === "bc1" || kind === "bc4" || kind === "bc4s") ? 8 : 16;
+    const bw = Math.ceil(w / 4), bh = Math.ceil(h / 4);
+    if (off + bw * bh * bs > u8.length) throw new Error("File is truncated — top mip level is incomplete");
+    for (let by = 0; by < bh; by++) {
+      for (let bx = 0; bx < bw; bx++) {
+        const o = off + (by * bw + bx) * bs;
+        switch (kind) {
+          case "bc1": bc1(u8, o, B, false); break;
+          case "bc2": bc2Alpha(u8, o, B); bc1(u8, o + 8, B, true); break;
+          case "bc3": bc4(u8, o, B, 3, false); bc1(u8, o + 8, B, true); break;
+          case "bc4": case "bc4s": bc4(u8, o, B, 0, kind === "bc4s"); for (let p = 0; p < 16; p++) { const q = p * 4; B[q + 1] = B[q + 2] = B[q]; B[q + 3] = 255; } break;
+          case "bc5": case "bc5s": bc4(u8, o, B, 0, kind === "bc5s"); bc4(u8, o + 8, B, 1, kind === "bc5s"); if (!G) reconZ(B); break;
+          case "bc7": bc7(u8, o, B); break;
+        }
+        const x0 = bx * 4, y0 = by * 4;
+        for (let py = 0; py < 4; py++) {
+          const y = y0 + py; if (y >= h) break;
+          for (let px = 0; px < 4; px++) {
+            const x = x0 + px; if (x >= w) break;
+            const s = (py * 4 + px) * 4, d = y * w + x;
+            if (G) out[d] = B[s + 1];
+            else { const d4 = d * 4; out[d4] = B[s]; out[d4 + 1] = B[s + 1]; out[d4 + 2] = B[s + 2]; out[d4 + 3] = B[s + 3]; }
+          }
+        }
+      }
+      if (performance.now() - t > 40) { onProgress(by / bh); await tick(); t = performance.now(); }
+    }
+  } else {
+    const bpp = kind.bpp, pitch = w * bpp;
+    if (!Number.isInteger(bpp) || bpp < 1 || bpp > 4) throw new Error(`Unsupported pixel size (${bits} bits)`);
+    if (off + pitch * h > u8.length) throw new Error("File is truncated — top mip level is incomplete");
+    const mk = kind.mask ? kind.mask.map(m => { if (!m) return null; let s = 0; while (!((m >>> s) & 1)) s++; return { m: m >>> 0, s, k: 255 / (m >>> s) }; }) : null;
+    const px = [0, 0, 0, 255];
+    for (let y = 0; y < h; y++) {
+      let o = off + y * pitch;
+      for (let x = 0; x < w; x++, o += bpp) {
+        if (mk) {
+          let v = u8[o]; if (bpp > 1) v |= u8[o + 1] << 8; if (bpp > 2) v |= u8[o + 2] << 16; if (bpp > 3) v |= u8[o + 3] << 24; v >>>= 0;
+          for (let c = 0; c < 4; c++) px[c] = mk[c] ? Math.round(((v & mk[c].m) >>> mk[c].s) * mk[c].k) : (c === 3 ? 255 : 0);
+        } else for (let c = 0; c < 4; c++) { const i = kind.idx[c]; px[c] = i >= 0 ? u8[o + i] : (c === 3 ? 255 : 0); }
+        if (recon && !G) px[2] = ZLUT[px[0] * 256 + px[1]];
+        const d = y * w + x;
+        if (G) out[d] = px[1]; else { const d4 = d * 4; out[d4] = px[0]; out[d4 + 1] = px[1]; out[d4 + 2] = px[2]; out[d4 + 3] = px[3]; }
+      }
+      if (performance.now() - t > 40) { onProgress(y / h); await tick(); t = performance.now(); }
+    }
+  }
+  return { w, h, data: out, fmt, note };
+}
+async function decodeRaster(file, want) {
+  const bmp = await createImageBitmap(file, { premultiplyAlpha: "none", colorSpaceConversion: "none" });
+  const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
+  const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(bmp, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height).data;
+  let out;
+  if (want === "g") { out = new Uint8Array(c.width * c.height); for (let i = 0, j = 1; i < out.length; i++, j += 4) out[i] = d[j]; }
+  else out = new Uint8Array(d.buffer.slice(0));
+  return { w: c.width, h: c.height, data: out, fmt: "PNG", note: "" };
+}
+
+/* ============================================================
+   PNG encoder (streamed deflate; exact values, no premultiply)
+   ============================================================ */
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u, c = 0xFFFFFFFF, final = true) { for (let i = 0; i < u.length; i++) c = CRC[(c ^ u[i]) & 255] ^ (c >>> 8); return final ? (c ^ 0xFFFFFFFF) >>> 0 : c; }
+function pngChunk(type, data) {
+  const head = new Uint8Array(8), dv = new DataView(head.buffer);
+  dv.setUint32(0, data.length); for (let i = 0; i < 4; i++) head[4 + i] = type.charCodeAt(i);
+  const crc = crc32(data, crc32(head.subarray(4), 0xFFFFFFFF, false));
+  const tail = new Uint8Array(4); new DataView(tail.buffer).setUint32(0, crc);
+  return [head, data, tail];
+}
+/* ct: 0 gray, 2 RGB, 6 RGBA · fillRow(y, row) writes one row of raw samples */
+async function encodePNG(w, h, ct, fillRow) {
+  const ch = ct === 0 ? 1 : ct === 2 ? 3 : 4, stride = w * ch;
+  if (typeof CompressionStream === "undefined") throw new Error("This browser can't encode PNGs here — use a current Chrome, Edge, Firefox or Safari.");
+  const cs = new CompressionStream("deflate"), wr = cs.writable.getWriter(), outP = new Response(cs.readable).arrayBuffer();
+  const rowsPer = Math.max(1, Math.floor(4e6 / (stride + 1))), row = new Uint8Array(stride);
+  for (let y0 = 0; y0 < h; y0 += rowsPer) {
+    const n = Math.min(rowsPer, h - y0), chunk = new Uint8Array(n * (stride + 1));
+    for (let k = 0; k < n; k++) {
+      fillRow(y0 + k, row);
+      const base = k * (stride + 1); chunk[base] = 1; // Sub filter
+      for (let i = 0; i < ch; i++) chunk[base + 1 + i] = row[i];
+      for (let i = ch; i < stride; i++) chunk[base + 1 + i] = (row[i] - row[i - ch]) & 255;
+    }
+    await wr.write(chunk);
+  }
+  await wr.close();
+  const idat = new Uint8Array(await outP);
+  const ihdr = new Uint8Array(13), dv = new DataView(ihdr.buffer);
+  dv.setUint32(0, w); dv.setUint32(4, h); ihdr[8] = 8; ihdr[9] = ct;
+  return new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), ...pngChunk("IHDR", ihdr), ...pngChunk("IDAT", idat), ...pngChunk("IEND", new Uint8Array(0))], { type: "image/png" });
+}
+function zip(entries) {
+  const now = new Date(), dt = ((now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)), dd = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate());
+  const parts = [], cen = []; let off = 0;
+  for (const e of entries) {
+    const nm = new TextEncoder().encode(e.name), crc = crc32(e.data), n = e.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+    lh.setUint16(10, dt, true); lh.setUint16(12, dd, true); lh.setUint32(14, crc, true); lh.setUint32(18, n, true); lh.setUint32(22, n, true); lh.setUint16(26, nm.length, true);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(12, dt, true); ch.setUint16(14, dd, true); ch.setUint32(16, crc, true); ch.setUint32(20, n, true); ch.setUint32(24, n, true);
+    ch.setUint16(28, nm.length, true); ch.setUint32(42, off, true);
+    parts.push(lh.buffer, nm, e.data); cen.push(ch.buffer, nm);
+    off += 30 + nm.length + n;
+  }
+  const cenSize = cen.reduce((s, p) => s + p.byteLength, 0), end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+  end.setUint32(12, cenSize, true); end.setUint32(16, off, true);
+  return new Blob([...parts, ...cen, end.buffer], { type: "application/zip" });
+}
+
+let downloadsP = null;
+function getDownloads() { if (!downloadsP) downloadsP = (window.claude && window.claude.use) ? Promise.resolve(window.claude.use("downloads")).catch(() => null) : Promise.resolve(null); return downloadsP; }
+getDownloads();
+const canPickFolder = typeof window.showDirectoryPicker === "function" && (() => { try { return window.top === window.self; } catch (e) { return false; } })();
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const hashN = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
+const vnoise = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, sx = xf * xf * (3 - 2 * xf), sy = yf * yf * (3 - 2 * yf);
+  const a = hashN(xi, yi), b = hashN(xi + 1, yi), c = hashN(xi, yi + 1), d = hashN(xi + 1, yi + 1);
+  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy; };
+/* shared panel-and-rivet height field for the examples */
+function exampleField(n) {
+  const H = new Float32Array(n * n);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    let f = 0, amp = .5, fr = 1 / 64;
+    for (let o = 0; o < 5; o++) { f += amp * vnoise(x * fr, y * fr); amp *= .5; fr *= 2; }
+    const gx = Math.min(x % 170, 170 - x % 170), gy = Math.min(y % 128, 128 - y % 128), groove = Math.min(gx, gy) < 2.5 ? -1 : 0;
+    const rx = (x % 170) - 12, ry = (y % 128) - 12;
+    const d1 = ((rx % 22 + 22) % 22 - 11) ** 2 + ry * ry, d2 = ((ry % 22 + 22) % 22 - 11) ** 2 + rx * rx, d = Math.min(d1, d2);
+    const rivet = d < 12 ? Math.sqrt(1 - d / 12) : 0;
+    H[y * n + x] = f * .35 + groove + rivet * .9;
+  }
+  return H;
+}
+
+/* ============================================================
+   Tool factory — queue, viewer, export shared by both tabs
+   ============================================================ */
+function makeTool(key, cfg) {
+  const root = document.querySelector(`[data-tool="${key}"]`);
+  root.innerHTML = `
+  <aside class="panel queue" aria-label="${cfg.noun} files">
+    <div class="panel-head"><span class="label">${cfg.listLabel}</span><span class="mono" data-q="count" style="font-size:12px;color:var(--muted)"></span></div>
+    <label class="drop" for="${key}-picker">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+      <strong>${cfg.dropTitle}</strong>
+      <small>or click to browse · several at once is fine</small>
+      <input type="file" id="${key}-picker" accept=".dds,.png" multiple hidden>
+    </label>
+    <ul class="files" data-q="files"></ul>
+    <div class="queue-foot"><span data-q="checkedInfo"></span><button class="linkish" data-q="toggleAll" type="button">Check all</button></div>
+  </aside>
+  <section class="work">
+    <div class="panel viewer">
+      <div class="panel-head">
+        <div class="fileinfo"><span class="nm" data-q="curName">No texture</span><span class="fmt" data-q="curFmt"></span><span class="note" data-q="curNote"></span></div>
+        <div class="zoombar" role="group" aria-label="Zoom">
+          <button type="button" data-q="zOut" aria-label="Zoom out">−</button>
+          <output data-q="zLevel">fit</output>
+          <button type="button" data-q="zIn" aria-label="Zoom in">+</button>
+          <button type="button" data-q="zFit">Fit</button>
+          <button type="button" data-q="z1">1:1</button>
+        </div>
+      </div>
+      <div class="panes">
+        <div class="pane"><span class="tag">${cfg.srcTag}</span><canvas data-q="cvSrc" width="1" height="1"></canvas><div class="placeholder" data-q="phSrc" hidden></div></div>
+        <div class="pane"><span class="tag">${cfg.outTag}</span><canvas data-q="cvOut" width="1" height="1"></canvas><div class="placeholder" data-q="phOut" hidden></div></div>
+      </div>
+      <div class="viewer-foot"><div class="readout" data-q="readout"><span>hover the image for values</span></div><span>scroll to zoom · drag to pan · double-click toggles fit / 1:1</span></div>
+    </div>
+    <div class="controls">
+      ${cfg.controlsHTML(key)}
+      <div class="panel export">
+        <div class="panel-head"><span class="label">Export</span></div>
+        <div class="body">
+          <div class="opt"><span class="label">Files</span>
+            <div class="seg" role="group" aria-label="Which files to export">
+              <button type="button" data-q="scopeCur" aria-pressed="true">This file</button>
+              <button type="button" data-q="scopeAll" aria-pressed="false">All checked</button>
+            </div>
+          </div>
+          ${cfg.exportExtraHTML ? cfg.exportExtraHTML(key) : ""}
+          <label class="field"><span>Filename suffix</span><input id="${key}-suffix" type="text" value="${cfg.suffix}" spellcheck="false" autocomplete="off"></label>
+          <div class="preview-name" data-q="namePreview"></div>
+          <div class="dest" data-q="dest"></div>
+          <button class="btn primary" data-q="exportBtn" type="button">Export</button>
+          <div class="progress" data-q="exProg" hidden><i></i></div>
+          <div class="log" data-q="log"></div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+  const q = n => root.querySelector(`[data-q="${n}"]`);
+  const T = { key, cfg, root, q, files: [], cur: null, linked: true, shared: { ...cfg.defaults }, scope: "cur", suffix: cfg.suffix, dir: null };
+  let uid = 0;
+  T.params = f => (T.linked || !f) ? T.shared : f.params;
+  const cvSrc = q("cvSrc"), cvOut = q("cvOut");
+
+  function prepare(f) {
+    const max = 1024, fac = Math.max(1, Math.ceil(Math.max(f.w, f.h) / max));
+    const pw = Math.max(1, Math.floor(f.w / fac)), ph = Math.max(1, Math.floor(f.h / fac)), ch = cfg.want === "g" ? 1 : 4;
+    const pd = new Uint8Array(pw * ph * ch);
+    if (fac === 1) pd.set(f.data);
+    else {
+      const n = fac * fac, acc = new Float64Array(ch);
+      for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
+        acc.fill(0);
+        for (let yy = 0; yy < fac; yy++) { let r = ((y * fac + yy) * f.w + x * fac) * ch; for (let xx = 0; xx < fac; xx++) for (let c = 0; c < ch; c++) acc[c] += f.data[r++]; }
+        for (let c = 0; c < ch; c++) pd[(y * pw + x) * ch + c] = Math.round(acc[c] / n);
+      }
+    }
+    f.prev = { pw, ph, pd };
+    cfg.prepare && cfg.prepare(f);
+    const t = document.createElement("canvas"); t.width = t.height = 72;
+    const tx = t.getContext("2d"), id = tx.createImageData(72, 72), t32 = new Uint32Array(id.data.buffer), fr = cfg.frame(T, f);
+    for (let y = 0; y < 72; y++) for (let x = 0; x < 72; x++) t32[y * 72 + x] = fr.src(pd, Math.floor(y * ph / 72) * pw + Math.floor(x * pw / 72));
+    tx.putImageData(id, 0, 0); f.thumb = t.toDataURL();
+  }
+  T.addExample = () => {
+    const f = Object.assign({ id: ++uid, status: "ready", checked: false, example: true, params: { ...T.shared } }, cfg.example());
+    prepare(f); T.files.push(f); T.cur = f;
+  };
+  T.addFiles = async list => {
+    const incoming = [...list].filter(f => /\.(dds|png)$/i.test(f.name));
+    if (!incoming.length) { setLog("Only .dds (and .png) files can be added.", "bad"); return; }
+    T.files = T.files.filter(f => !f.example);
+    const items = incoming.map(file => ({ id: ++uid, name: file.name, file, status: "decoding", progress: 0, checked: true, params: { ...T.shared } }));
+    T.files.push(...items);
+    if (!T.cur || !T.files.includes(T.cur)) T.cur = items[0];
+    renderList(); showCurrent();
+    for (const it of items) {
+      try {
+        const buf = await it.file.arrayBuffer();
+        const r = /\.dds$/i.test(it.name) ? await decodeDDS(buf, cfg.want, p => { it.progress = p; updateItem(it); }) : await decodeRaster(it.file, cfg.want);
+        Object.assign(it, r, { status: "ready", progress: 1 });
+        prepare(it);
+      } catch (e) { it.status = "error"; it.err = e.message || String(e); it.checked = false; }
+      delete it.file;
+      renderList();
+      if (it === T.cur) showCurrent();
+    }
+  };
+
+  function renderList() {
+    const ul = q("files"); ul.textContent = "";
+    if (!T.files.length) { const li = document.createElement("li"); li.className = "empty-list"; li.textContent = "No textures yet."; ul.append(li); }
+    for (const f of T.files) {
+      const li = document.createElement("li");
+      li.className = "file" + (f === T.cur ? " active" : ""); li.dataset.id = f.id; li.tabIndex = 0;
+      li.setAttribute("role", "button"); li.setAttribute("aria-label", "Show " + f.name);
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.className = "check"; cb.id = `${key}-chk${f.id}`;
+      cb.checked = f.checked; cb.disabled = f.status !== "ready"; cb.title = "Include in “All checked” export";
+      cb.addEventListener("click", e => e.stopPropagation());
+      cb.addEventListener("change", () => { f.checked = cb.checked; updateCounts(); });
+      const meta = document.createElement("div"); meta.className = "meta";
+      const nm = document.createElement("div"); nm.className = "name"; nm.textContent = f.name;
+      const sub = document.createElement("div"); sub.className = "sub";
+      if (f.status === "error") { const s = document.createElement("span"); s.className = "err"; s.textContent = f.err; sub.append(s); sub.title = f.err; }
+      else if (f.status === "decoding") sub.textContent = "decoding…";
+      else sub.textContent = `${f.w}×${f.h} · ${f.fmt}`;
+      meta.append(nm, sub);
+      if (f.status === "decoding") { const bar = document.createElement("div"); bar.className = "bar"; bar.innerHTML = "<i></i>"; bar.firstChild.style.width = (f.progress * 100) + "%"; meta.append(bar); }
+      const side = document.createElement("div"); side.className = "side";
+      if (f.example) { const c = document.createElement("span"); c.className = "chip ex"; c.textContent = "example"; side.append(c); }
+      else if (f.thumb) { const im = document.createElement("img"); im.className = "thumb"; im.src = f.thumb; im.alt = ""; side.append(im); }
+      const rm = document.createElement("button"); rm.className = "icon-btn"; rm.type = "button"; rm.title = "Remove"; rm.setAttribute("aria-label", "Remove " + f.name);
+      rm.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+      rm.addEventListener("click", e => { e.stopPropagation(); removeFile(f); });
+      side.append(rm);
+      li.append(cb, meta, side);
+      li.addEventListener("click", () => select(f));
+      li.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(f); } });
+      ul.append(li);
+    }
+    updateCounts();
+  }
+  function updateItem(f) { const bar = root.querySelector(`.file[data-id="${f.id}"] .bar i`); if (bar) bar.style.width = (f.progress * 100).toFixed(1) + "%"; }
+  function updateCounts() {
+    const ready = T.files.filter(f => f.status === "ready"), checked = ready.filter(f => f.checked);
+    q("count").textContent = T.files.length ? `${T.files.length} file${T.files.length > 1 ? "s" : ""}` : "";
+    q("checkedInfo").textContent = `${checked.length} of ${ready.length} checked for batch`;
+    q("toggleAll").textContent = checked.length === ready.length && ready.length ? "Uncheck all" : "Check all";
+    q("scopeAll").textContent = `All checked (${checked.length})`;
+    updateNamePreview();
+  }
+  function removeFile(f) {
+    const i = T.files.indexOf(f); T.files.splice(i, 1);
+    if (T.cur === f) T.cur = T.files[Math.min(i, T.files.length - 1)] || null;
+    renderList(); showCurrent();
+  }
+  function select(f) { T.cur = f; renderList(); showCurrent(); }
+  function showCurrent() {
+    const f = T.cur, ok = f && f.status === "ready";
+    q("curName").textContent = f ? f.name : "No texture";
+    q("curFmt").textContent = ok ? `${f.w}×${f.h} · ${f.fmt} · mip 0` : "";
+    q("curNote").textContent = f ? (f.status === "error" ? f.err : (f.note || "")) : "";
+    q("curNote").style.color = f && f.status === "error" ? "var(--bad)" : "";
+    q("phSrc").hidden = q("phOut").hidden = !!ok;
+    q("phSrc").textContent = !f ? cfg.emptyText : f.status === "decoding" ? "Decoding…" : f.status === "error" ? "Could not read this file" : "";
+    cvSrc.style.visibility = cvOut.style.visibility = ok ? "visible" : "hidden";
+    if (ok) { view.z = 1; view.cx = f.w / 2; view.cy = f.h / 2; }
+    T.refresh();
+  }
+  /* ---- zoomable, synced view: both panes share one transform ---- */
+  const view = { z: 1, cx: 0, cy: 0 };
+  const DPR = () => Math.min(2, window.devicePixelRatio || 1);
+  const fitScale = f => Math.min(cvSrc.width / f.w, cvSrc.height / f.h);
+  const scaleOf = f => fitScale(f) * view.z;               // device px per full-res texel
+  const maxZ = f => Math.max(1, 32 / fitScale(f));
+  function clampView(f) {
+    view.z = Math.min(Math.max(view.z, 1), maxZ(f));
+    const s = scaleOf(f), hw = cvSrc.width / 2 / s, hh = cvSrc.height / 2 / s;
+    view.cx = hw * 2 >= f.w ? f.w / 2 : Math.min(Math.max(view.cx, hw), f.w - hw);
+    view.cy = hh * 2 >= f.h ? f.h / 2 : Math.min(Math.max(view.cy, hh), f.h - hh);
+  }
+  function sizeCanvases() {
+    const r = cvSrc.parentElement.getBoundingClientRect(), d = DPR();
+    const W = Math.max(1, Math.round(r.width * d)), H = Math.max(1, Math.round(r.height * d));
+    for (const c of [cvSrc, cvOut]) if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+  }
+  let imgs = null;
+  function renderOut() {
+    const f = T.cur;
+    if (!f || f.status !== "ready" || root.hidden) return;
+    sizeCanvases(); clampView(f);
+    const W = cvSrc.width, H = cvSrc.height;
+    if (!imgs || imgs.W !== W || imgs.H !== H) {
+      const a = cvSrc.getContext("2d").createImageData(W, H), b = cvOut.getContext("2d").createImageData(W, H);
+      imgs = { W, H, a, b, a32: new Uint32Array(a.data.buffer), b32: new Uint32Array(b.data.buffer), col: new Int32Array(W) };
+    }
+    const s = scaleOf(f), usePrev = s <= f.prev.pw / f.w + 1e-9;
+    const lw = usePrev ? f.prev.pw : f.w, lh = usePrev ? f.prev.ph : f.h, data = usePrev ? f.prev.pd : f.data, k = lw / f.w;
+    const fr = cfg.frame(T, f), a32 = imgs.a32, b32 = imgs.b32, col = imgs.col;
+    for (let x = 0; x < W; x++) { const t = Math.floor(((x + .5 - W / 2) / s + view.cx) * k); col[x] = t >= 0 && t < lw ? t : -1; }
+    for (let y = 0, j = 0; y < H; y++) {
+      const ty = Math.floor(((y + .5 - H / 2) / s + view.cy) * k);
+      if (ty < 0 || ty >= lh) { a32.fill(0, j, j + W); b32.fill(0, j, j + W); j += W; continue; }
+      const row = ty * lw;
+      for (let x = 0; x < W; x++, j++) {
+        const t = col[x];
+        if (t < 0) { a32[j] = 0; b32[j] = 0; } else { a32[j] = fr.src(data, row + t); b32[j] = fr.out(data, row + t); }
+      }
+    }
+    cvSrc.getContext("2d").putImageData(imgs.a, 0, 0);
+    cvOut.getContext("2d").putImageData(imgs.b, 0, 0);
+    q("zLevel").textContent = view.z <= 1.0001 ? "fit" : Math.round(s / DPR() * 100) + "%";
+  }
+  function zoomAt(f, factor, mx, my) {
+    const s0 = scaleOf(f), W = cvSrc.width, H = cvSrc.height;
+    const tx = (mx - W / 2) / s0 + view.cx, ty = (my - H / 2) / s0 + view.cy;
+    view.z *= factor; view.z = Math.min(Math.max(view.z, 1), maxZ(f));
+    const s1 = scaleOf(f);
+    view.cx = tx - (mx - W / 2) / s1; view.cy = ty - (my - H / 2) / s1;
+    T.refresh();
+  }
+  const ready = () => T.cur && T.cur.status === "ready" ? T.cur : null;
+  const centre = () => [cvSrc.width / 2, cvSrc.height / 2];
+  q("zIn").addEventListener("click", () => { const f = ready(); if (f) zoomAt(f, 2, ...centre()); });
+  q("zOut").addEventListener("click", () => { const f = ready(); if (f) zoomAt(f, .5, ...centre()); });
+  q("zFit").addEventListener("click", () => { const f = ready(); if (f) { view.z = 1; T.refresh(); } });
+  q("z1").addEventListener("click", () => { const f = ready(); if (f) { view.z = DPR() / fitScale(f); T.refresh(); } });
+  new ResizeObserver(() => T.refresh()).observe(cvSrc.parentElement);
+  [cvSrc, cvOut].forEach(c => {
+    const devXY = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+    c.addEventListener("wheel", e => {
+      const f = ready(); if (!f) return; e.preventDefault();
+      zoomAt(f, Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0018)), ...devXY(e));
+    }, { passive: false });
+    c.addEventListener("dblclick", e => {
+      const f = ready(); if (!f) return;
+      const one = DPR() / fitScale(f);
+      if (view.z > 1.0001) { view.z = 1; T.refresh(); } else zoomAt(f, Math.max(one, 2), ...devXY(e));
+    });
+    let drag = null;
+    c.addEventListener("pointerdown", e => { if (!ready() || e.button !== 0) return; drag = { x: e.clientX, y: e.clientY }; c.setPointerCapture(e.pointerId); c.classList.add("panning"); });
+    c.addEventListener("pointerup", () => { drag = null; c.classList.remove("panning"); });
+    c.addEventListener("pointercancel", () => { drag = null; c.classList.remove("panning"); });
+    c.addEventListener("pointermove", e => {
+      const f = ready(); if (!f) return;
+      if (drag) {
+        const r = c.getBoundingClientRect(), s = scaleOf(f), k = c.width / r.width;
+        view.cx -= (e.clientX - drag.x) * k / s; view.cy -= (e.clientY - drag.y) * k / s;
+        drag = { x: e.clientX, y: e.clientY }; T.refresh();
+      }
+      const [mx, my] = devXY(e), s = scaleOf(f);
+      const fx = Math.floor((mx - c.width / 2) / s + view.cx), fy = Math.floor((my - c.height / 2) / s + view.cy);
+      if (fx < 0 || fy < 0 || fx >= f.w || fy >= f.h) return;
+      q("readout").innerHTML = `<span>x <b>${fx}</b> y <b>${fy}</b></span>` + cfg.readout(T, f, fy * f.w + fx);
+    });
+  });
+  let raf = 0;
+  T.refresh = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; T.controls.sync(); renderOut(); }); };
+  T.renderOut = renderOut;
+
+
+
+  /* export */
+  function seg(a, b, set) {
+    a.addEventListener("click", () => { set(0); a.setAttribute("aria-pressed", "true"); b.setAttribute("aria-pressed", "false"); });
+    b.addEventListener("click", () => { set(1); b.setAttribute("aria-pressed", "true"); a.setAttribute("aria-pressed", "false"); });
+  }
+  T.seg = seg;
+  seg(q("scopeCur"), q("scopeAll"), i => { T.scope = i ? "all" : "cur"; updateNamePreview(); });
+  root.querySelector(`#${key}-suffix`).addEventListener("input", e => { T.suffix = e.target.value.replace(/[\\/:*?"<>|]/g, ""); updateNamePreview(); });
+  q("toggleAll").addEventListener("click", () => {
+    const ready = T.files.filter(f => f.status === "ready"), all = ready.every(f => f.checked);
+    ready.forEach(f => f.checked = !all); renderList();
+  });
+  const outName = f => f.name.replace(/\.(dds|png)$/i, "") + T.suffix + ".png";
+  const targets = () => T.scope === "cur" ? (T.cur && T.cur.status === "ready" ? [T.cur] : []) : T.files.filter(f => f.status === "ready" && f.checked);
+  function updateNamePreview() {
+    const t = targets(), btn = q("exportBtn");
+    q("namePreview").textContent = !t.length ? "Nothing to export yet." : t.length === 1 ? "→ " + outName(t[0]) : `→ ${outName(t[0])} and ${t.length - 1} more`;
+    btn.disabled = !t.length;
+    btn.textContent = t.length > 1 ? `Export ${t.length} files${canPickFolder ? "…" : " as .zip"}` : (canPickFolder ? "Export to folder…" : "Export PNG");
+  }
+  function setLog(msg, cls) { const l = q("log"); l.textContent = msg; l.className = "log" + (cls ? " " + cls : ""); }
+  function updateDest() {
+    const d = q("dest");
+    if (T.dir) {
+      d.innerHTML = `Saving into <b></b> · <button class="linkish" type="button">change folder</button>`;
+      d.querySelector("b").textContent = T.dir.name + "/";
+      d.querySelector("button").onclick = () => { T.dir = null; updateDest(); };
+    } else d.textContent = canPickFolder ? "You'll pick the destination folder when you export." : "Here files are saved as a download (a .zip for batches). The standalone copy opened in Chrome or Edge writes straight into a folder you pick.";
+  }
+  q("exportBtn").addEventListener("click", async () => {
+    const list = targets(); if (!list.length) return;
+    const btn = q("exportBtn"), prog = q("exProg"), bar = prog.firstElementChild;
+    let dir = T.dir, mode = "folder";
+    if (!dir && canPickFolder) {
+      try { dir = await window.showDirectoryPicker({ id: key + "-export", mode: "readwrite" }); T.dir = dir; updateDest(); }
+      catch (e) { if (e && e.name === "AbortError") { setLog("Export cancelled."); return; } mode = "download"; }
+    } else if (!dir) mode = "download";
+    btn.disabled = true; prog.hidden = false; bar.style.width = "0";
+    const done = [];
+    try {
+      for (let i = 0; i < list.length; i++) {
+        const f = list[i]; setLog(`Encoding ${outName(f)} (${i + 1}/${list.length})…`);
+        await tick();
+        const blob = await cfg.encode(T, f);
+        if (mode === "folder") { const fh = await dir.getFileHandle(outName(f), { create: true }), w = await fh.createWritable(); await w.write(blob); await w.close(); }
+        else done.push({ name: outName(f), blob });
+        bar.style.width = ((i + 1) / list.length * 100) + "%";
+      }
+      if (mode === "folder") setLog(`Exported ${list.length} PNG${list.length > 1 ? "s" : ""} to ${dir.name}/`, "ok");
+      else {
+        let name, data;
+        if (done.length === 1) { name = done[0].name; data = done[0].blob; }
+        else {
+          setLog("Packing zip…");
+          const entries = [];
+          for (const d of done) entries.push({ name: d.name, data: new Uint8Array(await d.blob.arrayBuffer()) });
+          name = cfg.zipName + T.suffix + ".zip"; data = zip(entries);
+        }
+        const dl = await getDownloads();
+        if (dl) {
+          try { await dl.save({ filename: name, data }); setLog(`Saved ${name}${done.length > 1 ? ` (${done.length} PNGs)` : ""}.`, "ok"); }
+          catch (e) { const dec = e && e.code === "declined"; setLog(dec ? "Save declined." : `Save failed: ${e && (e.message || e.code)}`, dec ? "" : "bad"); }
+        } else {
+          const a = document.createElement("a"); a.href = URL.createObjectURL(data); a.download = name; document.body.append(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+          setLog(`Downloaded ${name}.`, "ok");
+        }
+      }
+    } catch (e) { setLog(`Export failed: ${e.message || e}`, "bad"); }
+    finally { btn.disabled = false; setTimeout(() => { prog.hidden = true; }, 600); updateNamePreview(); }
+  });
+  root.querySelector(`#${key}-picker`).addEventListener("change", e => { T.addFiles(e.target.files); e.target.value = ""; });
+
+  T.controls = cfg.initControls(T);
+  T.start = () => { T.addExample(); updateDest(); renderList(); showCurrent(); };
+  return T;
+}
+
+/* ============================================================
+   Roughmap tool — green channel + Photoshop-style levels
+   ============================================================ */
+const PRESET = { b: 91, g: 1.10, w: 238, ob: 0, ow: 255 };
+const IDENT = { b: 0, g: 1, w: 255, ob: 0, ow: 255 };
+function lutFor(L) {
+  const lut = new Uint8Array(256), span = Math.max(1, L.w - L.b), inv = 1 / L.g;
+  for (let i = 0; i < 256; i++) { let v = (i - L.b) / span; v = v < 0 ? 0 : v > 1 ? 1 : v; lut[i] = Math.round(L.ob + Math.pow(v, inv) * (L.ow - L.ob)); }
+  return lut;
+}
+const sameL = (a, b) => a.b === b.b && Math.abs(a.g - b.g) < 1e-6 && a.w === b.w && a.ob === b.ob && a.ow === b.ow;
+
+const rough = makeTool("rough", {
+  noun: "Roughmap", listLabel: "Roughmaps", dropTitle: "Drop roughmet .dds files", want: "g", suffix: "_rough", zipName: "roughmaps",
+  srcTag: "Green channel <em>· source</em>", outTag: "Levels <em>· result</em>", emptyText: "Drop a roughmet .dds to begin",
+  defaults: PRESET,
+  example() {
+    const n = 512, H = exampleField(n), G = new Uint8Array(n * n);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const scratch = Math.abs(((x * 0.8 + y * 0.35) % 97) - 48) < 0.6 && vnoise(x / 30, y / 30) > .55 ? 30 : 0;
+      const wear = vnoise(x / 90 + 7, y / 90) > .62 ? 22 : 0;
+      G[y * n + x] = Math.max(0, Math.min(255, Math.round(120 + H[y * n + x] * 70 + scratch + wear)));
+    }
+    return { name: "example_roughmet.dds", w: n, h: n, data: G, fmt: "BC7 · example", note: "" };
+  },
+  prepare(f) { const h = new Uint32Array(256); for (let i = 0; i < f.data.length; i++) h[f.data[i]]++; f.hist = h; },
+  frame(T, f) {
+    const lut = lutFor(T.params(f)), gray = T.out !== "green", S = new Uint32Array(256), O = new Uint32Array(256);
+    for (let v = 0; v < 256; v++) { const u = lut[v]; S[v] = 0xff000000 | (v << 16) | (v << 8) | v; O[v] = gray ? (0xff000000 | (u << 16) | (u << 8) | u) : (0xff000000 | (u << 8)); }
+    return { src: (d, i) => S[d[i]], out: (d, i) => O[d[i]] };
+  },
+  readout(T, f, i) { const v = f.data[i]; return `<span>G <b>${v}</b> → <b>${lutFor(T.params(f))[v]}</b></span>`; },
+  encode(T, f) {
+    const lut = lutFor(T.params(f)), g = f.data, w = f.w;
+    if (T.out === "green") return encodePNG(w, f.h, 2, (y, row) => { for (let x = 0, o = y * w; x < w; x++) { row[x * 3] = 0; row[x * 3 + 1] = lut[g[o + x]]; row[x * 3 + 2] = 0; } });
+    return encodePNG(w, f.h, 0, (y, row) => { for (let x = 0, o = y * w; x < w; x++) row[x] = lut[g[o + x]]; });
+  },
+  exportExtraHTML: () => `<div class="opt"><span class="label">PNG channels</span>
+      <div class="seg" role="group" aria-label="Output channels"><button type="button" data-q="outGray" aria-pressed="true">Grayscale</button><button type="button" data-q="outGreen" aria-pressed="false">Green only</button></div></div>`,
+  controlsHTML: k => `
+  <div class="panel">
+    <div class="panel-head"><span class="label">Levels</span>
+      <div class="presets">
+        <button class="btn" data-q="presetDcs" type="button">DCS default <span class="mono">91 · 1.10 · 238</span></button>
+        <button class="btn" data-q="presetReset" type="button">Reset</button>
+      </div>
+    </div>
+    <div class="body stack">
+      <div>
+        <div class="sub-h"><span class="label">Input levels</span><label class="switch"><input type="checkbox" id="${k}-linked" checked> Same levels for all files</label></div>
+        <div class="hist-wrap">
+          <canvas class="hist" data-q="hist" height="132"></canvas>
+          <div class="track grad"></div>
+          <div class="handles" data-q="inHandles">
+            <button class="h black" data-k="b" type="button" aria-label="Input black point"></button>
+            <button class="h gray" data-k="g" type="button" aria-label="Midtone gamma"></button>
+            <button class="h white" data-k="w" type="button" aria-label="Input white point"></button>
+          </div>
+        </div>
+        <div class="nums">
+          <label class="field"><span>Shadows</span><input id="${k}-inB" data-k="b" type="number" min="0" max="253" step="1" inputmode="numeric"></label>
+          <label class="field"><span>Midtones (gamma)</span><input id="${k}-inG" data-k="g" type="number" min="0.1" max="9.99" step="0.01" inputmode="decimal"></label>
+          <label class="field"><span>Highlights</span><input id="${k}-inW" data-k="w" type="number" min="2" max="255" step="1" inputmode="numeric"></label>
+        </div>
+      </div>
+      <div>
+        <div class="sub-h"><span class="label">Output levels</span></div>
+        <div class="hist-wrap">
+          <div class="track out-grad"></div>
+          <div class="handles" data-q="outHandles">
+            <button class="h black" data-k="ob" type="button" aria-label="Output black"></button>
+            <button class="h white" data-k="ow" type="button" aria-label="Output white"></button>
+          </div>
+        </div>
+        <div class="nums two">
+          <label class="field"><span>Output black</span><input id="${k}-outB" data-k="ob" type="number" min="0" max="255" step="1" inputmode="numeric"></label>
+          <label class="field"><span>Output white</span><input id="${k}-outW" data-k="ow" type="number" min="0" max="255" step="1" inputmode="numeric"></label>
+        </div>
+      </div>
+    </div>
+  </div>`,
+  initControls(T) {
+    const q = T.q, root = T.root;
+    T.out = "gray";
+    T.seg(q("outGray"), q("outGreen"), i => { T.out = i ? "green" : "gray"; T.renderOut(); });
+    const inputs = [...root.querySelectorAll("input[data-k]")];
+    const setL = patch => {
+      const L = T.params(T.cur); Object.assign(L, patch);
+      L.b = Math.round(Math.min(Math.max(L.b, 0), 253)); L.w = Math.round(Math.min(Math.max(L.w, L.b + 2), 255));
+      if (L.b > L.w - 2) L.b = L.w - 2;
+      L.g = Math.min(Math.max(Math.round(L.g * 100) / 100, 0.1), 9.99);
+      L.ob = Math.round(Math.min(Math.max(L.ob, 0), 255)); L.ow = Math.round(Math.min(Math.max(L.ow, 0), 255));
+      T.refresh();
+    };
+    inputs.forEach(el => {
+      el.addEventListener("input", () => { const v = parseFloat(el.value); if (Number.isFinite(v)) setL({ [el.dataset.k]: v }); });
+      el.addEventListener("change", () => { el.value = ""; T.refresh(); requestAnimationFrame(() => { const L = T.params(T.cur), k = el.dataset.k; el.value = k === "g" ? L.g.toFixed(2) : L[k]; }); });
+    });
+    ["inHandles", "outHandles"].forEach(n => {
+      const wrap = q(n);
+      wrap.querySelectorAll(".h").forEach(h => {
+        const k = h.dataset.k;
+        const apply = cx => {
+          const r = wrap.getBoundingClientRect(), v = Math.min(255, Math.max(0, (cx - r.left) / r.width * 255));
+          if (k === "g") { const L = T.params(T.cur), t = Math.min(.99, Math.max(.01, (v - L.b) / (L.w - L.b))); setL({ g: Math.log(t) / Math.log(0.5) }); }
+          else setL({ [k]: v });
+        };
+        h.addEventListener("pointerdown", e => { e.preventDefault(); h.setPointerCapture(e.pointerId); h.focus(); });
+        h.addEventListener("pointermove", e => { if (h.hasPointerCapture(e.pointerId)) apply(e.clientX); });
+        h.addEventListener("keydown", e => {
+          const L = T.params(T.cur), dir = (e.key === "ArrowRight" || e.key === "ArrowUp") ? 1 : (e.key === "ArrowLeft" || e.key === "ArrowDown") ? -1 : 0;
+          if (!dir) return; e.preventDefault();
+          if (k === "g") setL({ g: L.g - dir * (e.shiftKey ? .1 : .01) }); else setL({ [k]: L[k] + dir * (e.shiftKey ? 10 : 1) });
+        });
+      });
+    });
+    q("presetDcs").addEventListener("click", () => setL({ ...PRESET }));
+    q("presetReset").addEventListener("click", () => setL({ ...IDENT }));
+    root.querySelector("#rough-linked").addEventListener("change", e => {
+      if (!e.target.checked) T.files.forEach(f => f.params = { ...T.shared }); else if (T.cur) T.shared = { ...T.cur.params };
+      T.linked = e.target.checked; T.refresh();
+    });
+    function drawHist() {
+      const c = q("hist"), dpr = window.devicePixelRatio || 1, W = c.clientWidth || 300, H = 132;
+      c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+      const x = c.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H);
+      x.strokeStyle = cssVar("--line"); x.lineWidth = 1;
+      for (const s of [.25, .5, .75]) { x.beginPath(); x.moveTo(Math.round(W * s) + .5, 0); x.lineTo(Math.round(W * s) + .5, H); x.stroke(); }
+      const f = T.cur; if (!f || f.status !== "ready") return;
+      const hist = f.hist, cap = Math.max(1, [...hist].sort((a, b) => a - b)[Math.floor(255 * .995)]), L = T.params(f), bw = W / 256;
+      x.fillStyle = cssVar("--accent-soft"); x.fillRect(0, 0, L.b * bw, H); x.fillRect((L.w + 1) * bw, 0, W - (L.w + 1) * bw, H);
+      x.fillStyle = cssVar("--hist");
+      for (let i = 0; i < 256; i++) { const hg = Math.min(1, hist[i] / cap) * (H - 6); x.fillRect(i * bw, H - hg, Math.max(1, bw - .25), hg); }
+    }
+    return {
+      sync() {
+        const L = T.params(T.cur);
+        inputs.forEach(el => { if (document.activeElement !== el) el.value = el.dataset.k === "g" ? L.g.toFixed(2) : L[el.dataset.k]; });
+        const pos = { b: L.b, g: L.b + (L.w - L.b) * Math.pow(0.5, L.g), w: L.w, ob: L.ob, ow: L.ow };
+        root.querySelectorAll(".h").forEach(h => { const k = h.dataset.k; h.style.left = (pos[k] / 255 * 100) + "%"; h.setAttribute("aria-valuetext", k === "g" ? L.g.toFixed(2) : String(L[k])); });
+        q("presetDcs").classList.toggle("on", sameL(L, PRESET));
+        drawHist();
+      }
+    };
+  }
+});
+
+/* ============================================================
+   Normal map tool — flat 128·128·255 layer at an opacity
+   ============================================================ */
+const FLAT = [128, 128, 255];
+function blendLUTs(op) {
+  const p = op / 100, L = [new Uint8Array(256), new Uint8Array(256), new Uint8Array(256)];
+  for (let c = 0; c < 3; c++) for (let v = 0; v < 256; v++) L[c][v] = Math.round(v * (1 - p) + FLAT[c] * p);
+  return L;
+}
+/* angle between a pixel's normal and straight up, in degrees */
+const tilt = (r, g, b) => { const x = r / 127.5 - 1, y = g / 127.5 - 1, z = b / 127.5 - 1, l = Math.hypot(x, y, z) || 1; return Math.acos(Math.max(-1, Math.min(1, z / l))) * 180 / Math.PI; };
+const NORMAL_PRESETS = [{ op: 15, label: "Slightly weaker" }, { op: 40, label: "Noticeably weaker" }, { op: 75, label: "Almost flat" }];
+
+const normal = makeTool("normal", {
+  noun: "Normal map", listLabel: "Normal maps", dropTitle: "Drop normal map .dds files", want: "rgba", suffix: "_weak", zipName: "normals",
+  srcTag: "Original <em>· normal</em>", outTag: "Weakened <em>· result</em>", emptyText: "Drop a normal map .dds to begin",
+  defaults: { op: 40 },
+  example() {
+    const n = 512, H = exampleField(n), D = new Uint8Array(n * n * 4), s = 3.2;
+    const at = (x, y) => H[Math.min(n - 1, Math.max(0, y)) * n + Math.min(n - 1, Math.max(0, x))];
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      let nx = -(at(x + 1, y) - at(x - 1, y)) * s, ny = (at(x, y + 1) - at(x, y - 1)) * s, nz = 1;
+      const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+      const o = (y * n + x) * 4;
+      D[o] = Math.round((nx * .5 + .5) * 255); D[o + 1] = Math.round((ny * .5 + .5) * 255); D[o + 2] = Math.round((nz * .5 + .5) * 255); D[o + 3] = 255;
+    }
+    return { name: "example_normal.dds", w: n, h: n, data: D, fmt: "BC7 · example", note: "" };
+  },
+  prepare(f) {
+    let a = false; const d = f.data;
+    for (let i = 3; i < d.length; i += 4) if (d[i] !== 255) { a = true; break; }
+    f.hasAlpha = a;
+    const pd = f.prev.pd; let sum = 0, n = 0;
+    for (let i = 0; i < pd.length; i += 16) { sum += tilt(pd[i], pd[i + 1], pd[i + 2]); n++; }
+    f.tiltBase = n ? sum / n : 0;
+  },
+  frame(T, f) {
+    const [R, G, B] = blendLUTs(T.params(f).op);
+    return {
+      src: (d, i) => { const o = i * 4; return 0xff000000 | (d[o + 2] << 16) | (d[o + 1] << 8) | d[o]; },
+      out: (d, i) => { const o = i * 4; return 0xff000000 | (B[d[o + 2]] << 16) | (G[d[o + 1]] << 8) | R[d[o]]; }
+    };
+  },
+  readout(T, f, i) {
+    const d = f.data, o = i * 4, [R, G, B] = blendLUTs(T.params(f).op), r = d[o], g = d[o + 1], b = d[o + 2];
+    return `<span>RGB <b>${r}·${g}·${b}</b> → <b>${R[r]}·${G[g]}·${B[b]}</b></span><span>tilt <b>${tilt(r, g, b).toFixed(1)}°</b> → <b>${tilt(R[r], G[g], B[b]).toFixed(1)}°</b></span>`;
+  },
+  encode(T, f) {
+    const [R, G, B] = blendLUTs(T.params(f).op), d = f.data, w = f.w, a = f.hasAlpha, ch = a ? 4 : 3;
+    return encodePNG(w, f.h, a ? 6 : 2, (y, row) => {
+      for (let x = 0, s = y * w * 4, o = 0; x < w; x++, s += 4, o += ch) { row[o] = R[d[s]]; row[o + 1] = G[d[s + 1]]; row[o + 2] = B[d[s + 2]]; if (a) row[o + 3] = d[s + 3]; }
+    });
+  },
+  controlsHTML: k => `
+  <div class="panel">
+    <div class="panel-head"><span class="label">Flatten strength</span>
+      <div class="presets">
+        ${NORMAL_PRESETS.map(p => `<button class="btn" data-op="${p.op}" type="button">${p.label} <span class="mono">${p.op}%</span></button>`).join("")}
+        <button class="btn" data-op="0" type="button">Original</button>
+      </div>
+    </div>
+    <div class="body stack">
+      <div class="fill-row"><span class="swatch" aria-hidden="true"></span>
+        <div><b>Flat normal layer <span class="mono" style="font-weight:400;color:var(--muted)">R 128 · G 128 · B 255</span></b>
+        <small>Blended over the map at the opacity below, the same as a solid fill layer in Photoshop, flattened on export.</small></div>
+      </div>
+      <div>
+        <div class="sub-h"><span class="label">Layer opacity</span><label class="switch"><input type="checkbox" id="${k}-linked" checked> Same strength for all files</label></div>
+        <div class="op-scale">
+          <div class="zones" aria-hidden="true">
+            <div class="zone" style="left:10%;width:10%" title="10–20% slightly weaker">slight</div>
+            <div class="zone" style="left:30%;width:20%" title="30–50% noticeably weaker">noticeable</div>
+            <div class="zone" style="left:70%;width:30%" title="70%+ very weak / almost flat">very weak</div>
+          </div>
+          <input class="op-range" type="range" id="${k}-op" min="0" max="100" step="1" aria-label="Flat layer opacity">
+          <div class="ticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+        </div>
+      </div>
+      <div class="op-row">
+        <div class="stats">
+          <div class="stat"><span>Mean surface tilt</span><b data-q="tiltStat">–</b></div>
+          <div class="stat"><span>Detail kept</span><b data-q="keptStat">–</b></div>
+        </div>
+        <label class="field"><span>Opacity %</span><input id="${k}-opNum" type="number" min="0" max="100" step="1" inputmode="numeric"></label>
+      </div>
+    </div>
+  </div>`,
+  initControls(T) {
+    const root = T.root, q = T.q, range = root.querySelector("#normal-op"), num = root.querySelector("#normal-opNum");
+    const setOp = v => { if (!Number.isFinite(v)) return; T.params(T.cur).op = Math.round(Math.min(100, Math.max(0, v))); T.refresh(); };
+    range.addEventListener("input", () => setOp(+range.value));
+    num.addEventListener("input", () => setOp(parseFloat(num.value)));
+    num.addEventListener("change", () => { num.value = T.params(T.cur).op; });
+    root.querySelectorAll("[data-op]").forEach(b => b.addEventListener("click", () => setOp(+b.dataset.op)));
+    root.querySelector("#normal-linked").addEventListener("change", e => {
+      if (!e.target.checked) T.files.forEach(f => f.params = { ...T.shared }); else if (T.cur) T.shared = { ...T.cur.params };
+      T.linked = e.target.checked; T.refresh();
+    });
+    return {
+      sync() {
+        const op = T.params(T.cur).op, f = T.cur;
+        range.value = op; if (document.activeElement !== num) num.value = op;
+        root.querySelectorAll("[data-op]").forEach(b => b.classList.toggle("on", +b.dataset.op === op));
+        if (f && f.status === "ready") {
+          const [R, G, B] = blendLUTs(op), pd = f.prev.pd; let s = 0, n = 0;
+          for (let i = 0; i < pd.length; i += 16) { s += tilt(R[pd[i]], G[pd[i + 1]], B[pd[i + 2]]); n++; }
+          const after = n ? s / n : 0;
+          q("tiltStat").innerHTML = `${f.tiltBase.toFixed(1)}° <i>→</i> ${after.toFixed(1)}°`;
+          q("keptStat").textContent = f.tiltBase > 0.05 ? Math.round(after / f.tiltBase * 100) + "%" : "–";
+        } else { q("tiltStat").textContent = "–"; q("keptStat").textContent = "–"; }
+      }
+    };
+  }
+});
+
+/* ============================================================
+   Tabs, drag & drop, boot
+   ============================================================ */
+const tools = { rough, normal };
+const PIPES = {
+  rough: [".dds", "decode", "G channel", "levels", ".png"],
+  normal: [".dds", "decode", "RGB", "+ flat 128·128·255", ".png"]
+};
+let active = "rough";
+function setTab(k) {
+  active = k;
+  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", String(t.dataset.tab === k)));
+  document.querySelectorAll("[data-tool]").forEach(m => m.hidden = m.dataset.tool !== k);
+  document.getElementById("pipeline").innerHTML = PIPES[k].map(s => `<span>${s}</span>`).join("<i>→</i>");
+  try { localStorage.setItem("tl-tab", k); } catch (e) {}
+  tools[k].refresh();
+}
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", () => setTab(t.dataset.tab));
+  t.addEventListener("keydown", e => { if (e.key === "ArrowRight" || e.key === "ArrowLeft") { const n = active === "rough" ? "normal" : "rough"; setTab(n); document.getElementById("tab-" + n).focus(); } });
+});
+let dragDepth = 0;
+document.addEventListener("dragenter", e => { if ([...e.dataTransfer.types].includes("Files")) { dragDepth++; document.body.classList.add("dragging"); } });
+document.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dragging"); } });
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => { e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging"); if (e.dataTransfer.files.length) tools[active].addFiles(e.dataTransfer.files); });
+const redraw = () => tools[active].refresh();
+window.addEventListener("resize", redraw);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
+new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+rough.start(); normal.start();
+let saved = "rough"; try { saved = localStorage.getItem("tl-tab") || "rough"; } catch (e) {}
+setTab(tools[saved] ? saved : "rough");
+})();
+</script>
+
+</body></html>
