@@ -176,6 +176,9 @@ button,input{font:inherit;color:inherit}
 .stat span{font-size:11px;color:var(--muted)}
 .stat b{font-family:var(--f-mono);font-weight:500;font-size:15px;font-variant-numeric:tabular-nums}
 .stat b i{font-style:normal;color:var(--faint)}
+.facts{margin:0;padding-left:18px;display:grid;gap:6px;color:var(--muted);font-size:13px;max-width:65ch}
+.facts b{color:var(--ink);font-weight:600}
+.hint{color:var(--muted);font-size:12px}
 .op-row{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:12px;align-items:end}
 
 /* ---------- export ---------- */
@@ -200,6 +203,7 @@ button,input{font:inherit;color:inherit}
   <nav class="tabs" role="tablist" aria-label="Tools">
     <button class="tab" role="tab" id="tab-rough" data-tab="rough" aria-selected="true" type="button">Roughmap</button>
     <button class="tab" role="tab" id="tab-normal" data-tab="normal" aria-selected="false" type="button">Normal map</button>
+    <button class="tab" role="tab" id="tab-convert" data-tab="convert" aria-selected="false" type="button">DDS → PNG</button>
   </nav>
   <div class="spacer"></div>
   <div class="pipeline" id="pipeline" aria-label="Processing steps"></div>
@@ -207,6 +211,7 @@ button,input{font:inherit;color:inherit}
 
 <main class="shell" data-tool="rough" role="tabpanel" aria-labelledby="tab-rough"></main>
 <main class="shell" data-tool="normal" role="tabpanel" aria-labelledby="tab-normal" hidden></main>
+<main class="shell" data-tool="convert" role="tabpanel" aria-labelledby="tab-convert" hidden></main>
 
 <script>
 (() => {
@@ -310,9 +315,8 @@ const DXGI_NAMES = {70:"BC1",71:"BC1",72:"BC1 sRGB",73:"BC2",74:"BC2",75:"BC2 sR
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 /* want: "g" → Uint8Array(w*h) green channel · "rgba" → Uint8Array(w*h*4) */
-async function decodeDDS(buf, want, onProgress) {
-  const u8 = new Uint8Array(buf), dv = new DataView(buf);
-  if (buf.byteLength < 128 || dv.getUint32(0, true) !== 0x20534444) throw new Error("Not a DDS file (missing 'DDS ' header)");
+function ddsInfo(u8, dv, want) {
+  if (u8.length < 128 || dv.getUint32(0, true) !== 0x20534444) throw new Error("Not a DDS file (missing 'DDS ' header)");
   const h = dv.getUint32(12, true), w = dv.getUint32(16, true);
   const pfFlags = dv.getUint32(80, true), fourCC = String.fromCharCode(u8[84], u8[85], u8[86], u8[87]), bits = dv.getUint32(88, true);
   const masks = [92, 96, 100, 104].map(o => dv.getUint32(o, true));
@@ -352,7 +356,16 @@ async function decodeDDS(buf, want, onProgress) {
   if (recon) note = want === "rgba" ? "Two-channel normal map — blue rebuilt from red/green." : "";
   if (!kind) throw new Error(`Unsupported format ${fmt || "(unknown)"}. Supported: DXT1/3/5, BC1–BC5, BC7 and uncompressed 8-bit.`);
   if (!w || !h) throw new Error("DDS reports zero width or height");
-
+  return { w, h, off, kind, fmt, note, recon, bits };
+}
+/* header only — reads the first 148 bytes, never the pixel data */
+async function peekDDS(file, want) {
+  const buf = await file.slice(0, 148).arrayBuffer(), u8 = new Uint8Array(buf);
+  return ddsInfo(u8, new DataView(buf), want);
+}
+async function decodeDDS(buf, want, onProgress) {
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  const { w, h, off, kind, fmt, note, recon, bits } = ddsInfo(u8, dv, want);
   const G = want === "g", out = new Uint8Array(w * h * (G ? 1 : 4));
   const B = new Uint8Array(64);
   let t = performance.now();
@@ -583,14 +596,42 @@ function makeTool(key, cfg) {
     const f = Object.assign({ id: ++uid, status: "ready", checked: false, example: true, params: { ...T.shared } }, cfg.example());
     prepare(f); T.files.push(f); T.cur = f;
   };
+  /* lazy tools keep only the header per file; pixels are decoded for the file on screen and at export */
+  const fullDecode = f => /\.dds$/i.test(f.name)
+    ? f.file.arrayBuffer().then(buf => decodeDDS(buf, cfg.want, p => { f.progress = p; if (f === T.cur) q("phSrc").textContent = `Decoding… ${Math.round(p * 100)}%`; }))
+    : decodeRaster(f.file, cfg.want);
+  T.loaded = null;
+  async function loadCurrent(f) {
+    if (f.loading) return;
+    f.loading = true;
+    try {
+      const r = await fullDecode(f);
+      if (T.loaded && T.loaded !== f && !T.loaded.example) { delete T.loaded.data; delete T.loaded.prev; }
+      Object.assign(f, { data: r.data }); prepare(f); T.loaded = f;
+    } catch (e) { f.status = "error"; f.err = e.message || String(e); f.checked = false; }
+    f.loading = false;
+    renderList();
+    if (f === T.cur) showCurrent();
+  }
   T.addFiles = async list => {
     const incoming = [...list].filter(f => /\.(dds|png)$/i.test(f.name));
     if (!incoming.length) { setLog("Only .dds (and .png) files can be added.", "bad"); return; }
     T.files = T.files.filter(f => !f.example);
-    const items = incoming.map(file => ({ id: ++uid, name: file.name, file, status: "decoding", progress: 0, checked: true, params: { ...T.shared } }));
+    const items = incoming.map(file => ({ id: ++uid, name: file.name, file, size: file.size, status: "decoding", progress: 0, checked: true, params: { ...T.shared } }));
     T.files.push(...items);
     if (!T.cur || !T.files.includes(T.cur)) T.cur = items[0];
     renderList(); showCurrent();
+    if (cfg.lazy) {
+      for (const it of items) {
+        try {
+          if (/\.dds$/i.test(it.name)) Object.assign(it, await peekDDS(it.file, cfg.want));
+          else { const bm = await createImageBitmap(it.file); Object.assign(it, { w: bm.width, h: bm.height, fmt: "PNG" }); bm.close && bm.close(); }
+          it.status = "ready";
+        } catch (e) { it.status = "error"; it.err = e.message || String(e); it.checked = false; }
+      }
+      renderList(); showCurrent();
+      return;
+    }
     for (const it of items) {
       try {
         const buf = await it.file.arrayBuffer();
@@ -614,7 +655,7 @@ function makeTool(key, cfg) {
       const cb = document.createElement("input"); cb.type = "checkbox"; cb.className = "check"; cb.id = `${key}-chk${f.id}`;
       cb.checked = f.checked; cb.disabled = f.status !== "ready"; cb.title = "Include in “All checked” export";
       cb.addEventListener("click", e => e.stopPropagation());
-      cb.addEventListener("change", () => { f.checked = cb.checked; updateCounts(); });
+      cb.addEventListener("change", () => { f.checked = cb.checked; updateCounts(); T.controls.sync(); });
       const meta = document.createElement("div"); meta.className = "meta";
       const nm = document.createElement("div"); nm.className = "name"; nm.textContent = f.name;
       const sub = document.createElement("div"); sub.className = "sub";
@@ -653,13 +694,15 @@ function makeTool(key, cfg) {
   }
   function select(f) { T.cur = f; renderList(); showCurrent(); }
   function showCurrent() {
-    const f = T.cur, ok = f && f.status === "ready";
+    const f = T.cur;
+    if (cfg.lazy && f && f.status === "ready" && !f.prev) loadCurrent(f);
+    const ok = f && f.status === "ready" && !!f.prev;
     q("curName").textContent = f ? f.name : "No texture";
     q("curFmt").textContent = ok ? `${f.w}×${f.h} · ${f.fmt} · mip 0` : "";
     q("curNote").textContent = f ? (f.status === "error" ? f.err : (f.note || "")) : "";
     q("curNote").style.color = f && f.status === "error" ? "var(--bad)" : "";
     q("phSrc").hidden = q("phOut").hidden = !!ok;
-    q("phSrc").textContent = !f ? cfg.emptyText : f.status === "decoding" ? "Decoding…" : f.status === "error" ? "Could not read this file" : "";
+    q("phSrc").textContent = !f ? cfg.emptyText : (f.status === "decoding" || f.loading) ? "Decoding…" : f.status === "error" ? "Could not read this file" : "";
     cvSrc.style.visibility = cvOut.style.visibility = ok ? "visible" : "hidden";
     if (ok) { view.z = 1; view.cx = f.w / 2; view.cy = f.h / 2; }
     T.refresh();
@@ -684,7 +727,7 @@ function makeTool(key, cfg) {
   let imgs = null;
   function renderOut() {
     const f = T.cur;
-    if (!f || f.status !== "ready" || root.hidden) return;
+    if (!f || f.status !== "ready" || !f.prev || root.hidden) return;
     sizeCanvases(); clampView(f);
     const W = cvSrc.width, H = cvSrc.height;
     if (!imgs || imgs.W !== W || imgs.H !== H) {
@@ -716,7 +759,7 @@ function makeTool(key, cfg) {
     view.cx = tx - (mx - W / 2) / s1; view.cy = ty - (my - H / 2) / s1;
     T.refresh();
   }
-  const ready = () => T.cur && T.cur.status === "ready" ? T.cur : null;
+  const ready = () => T.cur && T.cur.status === "ready" && T.cur.prev ? T.cur : null;
   const centre = () => [cvSrc.width / 2, cvSrc.height / 2];
   q("zIn").addEventListener("click", () => { const f = ready(); if (f) zoomAt(f, 2, ...centre()); });
   q("zOut").addEventListener("click", () => { const f = ready(); if (f) zoomAt(f, .5, ...centre()); });
@@ -767,7 +810,7 @@ function makeTool(key, cfg) {
   root.querySelector(`#${key}-suffix`).addEventListener("input", e => { T.suffix = e.target.value.replace(/[\\/:*?"<>|]/g, ""); updateNamePreview(); });
   q("toggleAll").addEventListener("click", () => {
     const ready = T.files.filter(f => f.status === "ready"), all = ready.every(f => f.checked);
-    ready.forEach(f => f.checked = !all); renderList();
+    ready.forEach(f => f.checked = !all); renderList(); T.controls.sync();
   });
   const outName = f => f.name.replace(/\.(dds|png)$/i, "") + T.suffix + ".png";
   const targets = () => T.scope === "cur" ? (T.cur && T.cur.status === "ready" ? [T.cur] : []) : T.files.filter(f => f.status === "ready" && f.checked);
@@ -800,30 +843,42 @@ function makeTool(key, cfg) {
       for (let i = 0; i < list.length; i++) {
         const f = list[i]; setLog(`Encoding ${outName(f)} (${i + 1}/${list.length})…`);
         await tick();
-        const blob = await cfg.encode(T, f);
+        const src = f.data ? f : Object.assign({}, f, await fullDecode(f));
+        const blob = await cfg.encode(T, src);
         if (mode === "folder") { const fh = await dir.getFileHandle(outName(f), { create: true }), w = await fh.createWritable(); await w.write(blob); await w.close(); }
         else done.push({ name: outName(f), blob });
         bar.style.width = ((i + 1) / list.length * 100) + "%";
       }
       if (mode === "folder") setLog(`Exported ${list.length} PNG${list.length > 1 ? "s" : ""} to ${dir.name}/`, "ok");
       else {
-        let name, data;
-        if (done.length === 1) { name = done[0].name; data = done[0].blob; }
-        else {
-          setLog("Packing zip…");
-          const entries = [];
-          for (const d of done) entries.push({ name: d.name, data: new Uint8Array(await d.blob.arrayBuffer()) });
-          name = cfg.zipName + T.suffix + ".zip"; data = zip(entries);
+        /* zip parts stay under 1 GiB and 60k entries each, so any batch size works */
+        const PART = 1 << 30, groups = [];
+        for (const d of done) {
+          const g = groups[groups.length - 1];
+          if (!g || g.size + d.blob.size > PART || g.items.length >= 60000) groups.push({ size: d.blob.size, items: [d] });
+          else { g.size += d.blob.size; g.items.push(d); }
         }
         const dl = await getDownloads();
-        if (dl) {
-          try { await dl.save({ filename: name, data }); setLog(`Saved ${name}${done.length > 1 ? ` (${done.length} PNGs)` : ""}.`, "ok"); }
-          catch (e) { const dec = e && e.code === "declined"; setLog(dec ? "Save declined." : `Save failed: ${e && (e.message || e.code)}`, dec ? "" : "bad"); }
-        } else {
-          const a = document.createElement("a"); a.href = URL.createObjectURL(data); a.download = name; document.body.append(a); a.click(); a.remove();
-          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-          setLog(`Downloaded ${name}.`, "ok");
+        let saved = 0;
+        for (let gi = 0; gi < groups.length; gi++) {
+          const g = groups[gi];
+          let name, data;
+          if (done.length === 1) { name = done[0].name; data = done[0].blob; }
+          else {
+            setLog(`Packing zip${groups.length > 1 ? ` ${gi + 1} of ${groups.length}` : ""}…`);
+            const entries = [];
+            for (const d of g.items) entries.push({ name: d.name, data: new Uint8Array(await d.blob.arrayBuffer()) });
+            name = (cfg.zipName + T.suffix) + (groups.length > 1 ? `-part${gi + 1}` : "") + ".zip"; data = zip(entries);
+          }
+          if (dl) {
+            try { await dl.save({ filename: name, data }); saved++; }
+            catch (e) { const dec = e && e.code === "declined"; setLog(dec ? "Save declined." : `Save failed: ${e && (e.message || e.code)}`, dec ? "" : "bad"); break; }
+          } else {
+            const a = document.createElement("a"); a.href = URL.createObjectURL(data); a.download = name; document.body.append(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 4000); saved++;
+          }
         }
+        if (saved === groups.length) setLog(done.length === 1 ? `Saved ${done[0].name}.` : `Saved ${done.length} PNGs in ${groups.length} zip${groups.length > 1 ? "s" : ""}.`, "ok");
       }
     } catch (e) { setLog(`Export failed: ${e.message || e}`, "bad"); }
     finally { btn.disabled = false; setTimeout(() => { prog.hidden = true; }, 600); updateNamePreview(); }
@@ -1097,13 +1152,84 @@ const normal = makeTool("normal", {
   }
 });
 
+
+/* ============================================================
+   DDS → PNG — straight conversion of color textures, any count, any size
+   ============================================================ */
+const hasAlphaIn = d => { for (let i = 3; i < d.length; i += 4) if (d[i] !== 255) return true; return false; };
+const fmtBytes = n => n >= 1073741824 ? (n / 1073741824).toFixed(2) + " GB" : n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+const convert = makeTool("convert", {
+  noun: "Texture", listLabel: "Textures", dropTitle: "Drop any .dds textures", want: "rgba", lazy: true, suffix: "", zipName: "textures",
+  srcTag: "Color <em>· RGB</em>", outTag: "Alpha <em>· channel</em>", emptyText: "Drop color .dds textures to convert",
+  defaults: {},
+  example() {
+    const n = 512, H = exampleField(n), D = new Uint8Array(n * n * 4);
+    const camo = [[74, 84, 62], [104, 112, 84], [52, 58, 46], [138, 132, 104]];
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const v = vnoise(x / 70, y / 55) * .7 + vnoise(x / 23 + 9, y / 23) * .3;
+      const c = camo[v < .38 ? 2 : v < .52 ? 0 : v < .66 ? 1 : 3], sh = 1 + H[y * n + x] * .12, o = (y * n + x) * 4;
+      for (let k = 0; k < 3; k++) D[o + k] = Math.max(0, Math.min(255, Math.round(c[k] * sh)));
+      D[o + 3] = Math.max(0, Math.min(255, Math.round(150 + H[y * n + x] * 80 + (vnoise(x / 40, y / 40 + 3) - .5) * 90)));
+    }
+    return { name: "example_diffuse.dds", w: n, h: n, data: D, fmt: "BC3 · example", note: "" };
+  },
+  prepare(f) { f.hasAlpha = hasAlphaIn(f.data); },
+  frame() {
+    return {
+      src: (d, i) => { const o = i * 4; return 0xff000000 | (d[o + 2] << 16) | (d[o + 1] << 8) | d[o]; },
+      out: (d, i) => { const a = d[i * 4 + 3]; return 0xff000000 | (a << 16) | (a << 8) | a; }
+    };
+  },
+  readout(T, f, i) { const d = f.data, o = i * 4; return `<span>RGBA <b>${d[o]}·${d[o + 1]}·${d[o + 2]}·${d[o + 3]}</b></span>`; },
+  encode(T, f) {
+    const d = f.data, w = f.w, a = T.alpha === "keep" && (f.hasAlpha ?? hasAlphaIn(d)), ch = a ? 4 : 3;
+    return encodePNG(w, f.h, a ? 6 : 2, (y, row) => {
+      for (let x = 0, s = y * w * 4, o = 0; x < w; x++, s += 4, o += ch) { row[o] = d[s]; row[o + 1] = d[s + 1]; row[o + 2] = d[s + 2]; if (a) row[o + 3] = d[s + 3]; }
+    });
+  },
+  controlsHTML: () => `
+  <div class="panel">
+    <div class="panel-head"><span class="label">Conversion</span></div>
+    <div class="body stack">
+      <div class="opt"><span class="label">Alpha channel</span>
+        <div class="seg" role="group" aria-label="Alpha channel">
+          <button type="button" data-q="aKeep" aria-pressed="true">Keep alpha</button>
+          <button type="button" data-q="aDrop" aria-pressed="false">Drop alpha (RGB)</button>
+        </div>
+        <small class="hint">Textures with no transparency are written as RGB either way.</small>
+      </div>
+      <div class="stats">
+        <div class="stat"><span>Checked for batch</span><b data-q="cCount">–</b></div>
+        <div class="stat"><span>Total .dds size</span><b data-q="cSize">–</b></div>
+      </div>
+      <ul class="facts">
+        <li><b>Full resolution.</b> The top mip is written pixel for pixel — nothing resized or filtered.</li>
+        <li><b>No count or size cap.</b> Adding a file only reads its header; pixels are decoded one file at a time at export, so memory stays flat.</li>
+        <li><b>Colors untouched.</b> No sRGB, gamma or channel changes; two-channel normal maps get blue rebuilt.</li>
+      </ul>
+    </div>
+  </div>`,
+  initControls(T) {
+    T.alpha = "keep";
+    T.seg(T.q("aKeep"), T.q("aDrop"), i => { T.alpha = i ? "drop" : "keep"; });
+    return {
+      sync() {
+        const c = T.files.filter(f => f.status === "ready" && f.checked && !f.example);
+        T.q("cCount").textContent = `${c.length} file${c.length === 1 ? "" : "s"}`;
+        T.q("cSize").textContent = c.length ? fmtBytes(c.reduce((s, f) => s + (f.size || 0), 0)) : "–";
+      }
+    };
+  }
+});
 /* ============================================================
    Tabs, drag & drop, boot
    ============================================================ */
-const tools = { rough, normal };
+const tools = { rough, normal, convert };
+const ORDER = ["rough", "normal", "convert"];
 const PIPES = {
   rough: [".dds", "decode", "G channel", "levels", ".png"],
-  normal: [".dds", "decode", "RGB", "+ flat 128·128·255", ".png"]
+  normal: [".dds", "decode", "RGB", "+ flat 128·128·255", ".png"],
+  convert: [".dds", "decode", "RGBA", ".png"]
 };
 let active = "rough";
 function setTab(k) {
@@ -1116,7 +1242,7 @@ function setTab(k) {
 }
 document.querySelectorAll(".tab").forEach(t => {
   t.addEventListener("click", () => setTab(t.dataset.tab));
-  t.addEventListener("keydown", e => { if (e.key === "ArrowRight" || e.key === "ArrowLeft") { const n = active === "rough" ? "normal" : "rough"; setTab(n); document.getElementById("tab-" + n).focus(); } });
+  t.addEventListener("keydown", e => { if (e.key === "ArrowRight" || e.key === "ArrowLeft") { const n = ORDER[(ORDER.indexOf(active) + (e.key === "ArrowRight" ? 1 : ORDER.length - 1)) % ORDER.length]; setTab(n); document.getElementById("tab-" + n).focus(); } });
 });
 let dragDepth = 0;
 document.addEventListener("dragenter", e => { if ([...e.dataTransfer.types].includes("Files")) { dragDepth++; document.body.classList.add("dragging"); } });
@@ -1128,7 +1254,7 @@ window.addEventListener("resize", redraw);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
 new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
-rough.start(); normal.start();
+rough.start(); normal.start(); convert.start();
 let saved = "rough"; try { saved = localStorage.getItem("tl-tab") || "rough"; } catch (e) {}
 setTab(tools[saved] ? saved : "rough");
 })();
