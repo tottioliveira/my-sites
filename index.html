@@ -195,6 +195,24 @@ button,input{font:inherit;color:inherit}
 .log.ok{color:var(--good)}.log.bad{color:var(--bad)}
 .progress{height:3px;background:var(--line);border-radius:2px;overflow:hidden}
 .progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+/* ---------- livery folder ---------- */
+.lv-note{padding:0 14px 12px;font-size:12px;color:var(--muted)}
+.lv-note b{color:var(--ink);font-weight:500}
+.comp-list{list-style:none;margin:0;padding:12px 14px;display:grid;gap:8px;max-height:60vh;overflow:auto}
+.comp{border:1px solid var(--line);border-radius:5px;background:var(--raised);padding:9px 11px;display:grid;gap:6px}
+.comp-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.comp-h b{font-family:var(--f-display);font-weight:600;font-size:14px;letter-spacing:.02em}
+.comp-h .dirtag{font-family:var(--f-mono);font-size:10.5px;color:var(--faint);border:1px solid var(--line);border-radius:3px;padding:0 5px}
+.rows{display:grid;gap:3px}
+.r{display:grid;grid-template-columns:14px 78px minmax(0,1fr) minmax(0,1.1fr);gap:8px;align-items:center;font-size:12.5px}
+.r.derived{margin-left:16px}
+.r .s{font-family:var(--f-mono);font-weight:600;color:var(--good);text-align:center}
+.r .k{font-weight:500;white-space:nowrap}
+.r .f,.r .o{font-family:var(--f-mono);font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r .o{color:var(--faint)}
+.r.miss,.r.miss .s{color:var(--faint)}
+.r.warn .s{color:var(--warn)}
+@media (max-width:760px){.r{grid-template-columns:14px 72px minmax(0,1fr)}.r .o{display:none}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
@@ -204,6 +222,7 @@ button,input{font:inherit;color:inherit}
     <button class="tab" role="tab" id="tab-rough" data-tab="rough" aria-selected="true" type="button">Roughmap</button>
     <button class="tab" role="tab" id="tab-normal" data-tab="normal" aria-selected="false" type="button">Normal map</button>
     <button class="tab" role="tab" id="tab-convert" data-tab="convert" aria-selected="false" type="button">DDS → PNG</button>
+    <button class="tab" role="tab" id="tab-livery" data-tab="livery" aria-selected="false" type="button">Livery folder</button>
   </nav>
   <div class="spacer"></div>
   <div class="pipeline" id="pipeline" aria-label="Processing steps"></div>
@@ -212,6 +231,7 @@ button,input{font:inherit;color:inherit}
 <main class="shell" data-tool="rough" role="tabpanel" aria-labelledby="tab-rough"></main>
 <main class="shell" data-tool="normal" role="tabpanel" aria-labelledby="tab-normal" hidden></main>
 <main class="shell" data-tool="convert" role="tabpanel" aria-labelledby="tab-convert" hidden></main>
+<main class="shell" data-tool="livery" role="tabpanel" aria-labelledby="tab-livery" hidden></main>
 
 <script>
 (() => {
@@ -488,6 +508,49 @@ function zip(entries) {
 let downloadsP = null;
 function getDownloads() { if (!downloadsP) downloadsP = (window.claude && window.claude.use) ? Promise.resolve(window.claude.use("downloads")).catch(() => null) : Promise.resolve(null); return downloadsP; }
 getDownloads();
+
+/* hands a finished batch to the browser · zip parts stay under 1 GiB and 60k entries
+   each, so any batch size works · entry names may contain "/" to build folders */
+async function saveBundle(done, zipBase, setLog, opts = {}) {
+  const PART = 1 << 30, groups = [];
+  for (const d of done) {
+    const g = groups[groups.length - 1];
+    if (!g || g.size + d.blob.size > PART || g.items.length >= 60000) groups.push({ size: d.blob.size, items: [d] });
+    else { g.size += d.blob.size; g.items.push(d); }
+  }
+  const single = !!opts.allowSingle && done.length === 1;
+  const dl = await getDownloads();
+  let saved = 0;
+  for (let gi = 0; gi < groups.length; gi++) {
+    let name, data;
+    if (single) { name = done[0].name; data = done[0].blob; }
+    else {
+      setLog(`Packing zip${groups.length > 1 ? ` ${gi + 1} of ${groups.length}` : ""}…`);
+      const entries = [];
+      for (const d of groups[gi].items) entries.push({ name: d.name, data: new Uint8Array(await d.blob.arrayBuffer()) });
+      name = zipBase + (groups.length > 1 ? `-part${gi + 1}` : "") + ".zip"; data = zip(entries);
+    }
+    if (dl) {
+      try { await dl.save({ filename: name, data }); saved++; }
+      catch (e) { const dec = e && e.code === "declined"; setLog(dec ? "Save declined." : `Save failed: ${e && (e.message || e.code)}`, dec ? "" : "bad"); break; }
+    } else {
+      const a = document.createElement("a"); a.href = URL.createObjectURL(data); a.download = name; document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000); saved++;
+    }
+  }
+  return { saved, parts: groups.length, single };
+}
+/* walks nested folders down to a flat list of { file, path } */
+async function walkEntry(entry, prefix, out) {
+  if (entry.isFile) { out.push({ file: await new Promise((res, rej) => entry.file(res, rej)), path: prefix + entry.name }); return; }
+  if (!entry.isDirectory) return;
+  const rd = entry.createReader();
+  for (;;) {
+    const batch = await new Promise((res, rej) => rd.readEntries(res, rej));
+    if (!batch.length) break;
+    for (const e of batch) await walkEntry(e, prefix + entry.name + "/", out);
+  }
+}
 const canPickFolder = typeof window.showDirectoryPicker === "function" && (() => { try { return window.top === window.self; } catch (e) { return false; } })();
 const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const hashN = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
@@ -851,34 +914,8 @@ function makeTool(key, cfg) {
       }
       if (mode === "folder") setLog(`Exported ${list.length} PNG${list.length > 1 ? "s" : ""} to ${dir.name}/`, "ok");
       else {
-        /* zip parts stay under 1 GiB and 60k entries each, so any batch size works */
-        const PART = 1 << 30, groups = [];
-        for (const d of done) {
-          const g = groups[groups.length - 1];
-          if (!g || g.size + d.blob.size > PART || g.items.length >= 60000) groups.push({ size: d.blob.size, items: [d] });
-          else { g.size += d.blob.size; g.items.push(d); }
-        }
-        const dl = await getDownloads();
-        let saved = 0;
-        for (let gi = 0; gi < groups.length; gi++) {
-          const g = groups[gi];
-          let name, data;
-          if (done.length === 1) { name = done[0].name; data = done[0].blob; }
-          else {
-            setLog(`Packing zip${groups.length > 1 ? ` ${gi + 1} of ${groups.length}` : ""}…`);
-            const entries = [];
-            for (const d of g.items) entries.push({ name: d.name, data: new Uint8Array(await d.blob.arrayBuffer()) });
-            name = (cfg.zipName + T.suffix) + (groups.length > 1 ? `-part${gi + 1}` : "") + ".zip"; data = zip(entries);
-          }
-          if (dl) {
-            try { await dl.save({ filename: name, data }); saved++; }
-            catch (e) { const dec = e && e.code === "declined"; setLog(dec ? "Save declined." : `Save failed: ${e && (e.message || e.code)}`, dec ? "" : "bad"); break; }
-          } else {
-            const a = document.createElement("a"); a.href = URL.createObjectURL(data); a.download = name; document.body.append(a); a.click(); a.remove();
-            setTimeout(() => URL.revokeObjectURL(a.href), 4000); saved++;
-          }
-        }
-        if (saved === groups.length) setLog(done.length === 1 ? `Saved ${done[0].name}.` : `Saved ${done.length} PNGs in ${groups.length} zip${groups.length > 1 ? "s" : ""}.`, "ok");
+        const r = await saveBundle(done, cfg.zipName + T.suffix, setLog, { allowSingle: true });
+        if (r.saved === r.parts) setLog(r.single ? `Saved ${done[0].name}.` : `Saved ${done.length} PNGs in ${r.parts} zip${r.parts > 1 ? "s" : ""}.`, "ok");
       }
     } catch (e) { setLog(`Export failed: ${e.message || e}`, "bad"); }
     finally { btn.disabled = false; setTimeout(() => { prog.hidden = true; }, 600); updateNamePreview(); }
@@ -1222,14 +1259,463 @@ const convert = makeTool("convert", {
   }
 });
 /* ============================================================
+   Livery folder → Roblox texture pack
+   Automates the manual route: it reuses decodeDDS, encodePNG, lutFor +
+   the Roughmap tab's levels, blendLUTs from the Normal map tab, and zip().
+   ============================================================ */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const safeSeg = s => (s.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").replace(/[. ]+$/, "").trim() || "texture");
+const tokenize = s => s.split(/[ _\-.]+/).filter(Boolean);
+const natKey = s => s.toLowerCase().replace(/\d+/g, d => d.padStart(8, "0"));
+
+/* Blue channel in a DCS RoughMet is rarely a clean 0/1 split — painted panels
+   carry 20–90 and only bare metal sits high. These levels (the same engine as
+   the Roughmap tab) drop the weak information to 0 so the airframe doesn't read
+   as metal, while keeping exposed metal and metal parts fully metallic. */
+const METAL_PRESETS = [
+  { label: "Balanced", L: { b: 96, g: 1, w: 192, ob: 0, ow: 255 } },
+  { label: "Strict", L: { b: 128, g: 1, w: 224, ob: 0, ow: 255 } },
+  { label: "Faithful", L: { ...IDENT } }
+];
+
+/* DCS / mod filename suffixes → what the texture is.
+   sep:true needs a _ - . or space in front, so "Tornado" can't read as "…_AO". */
+const SUFFIX_RULES = [
+  { kind: "roughmet", sep: false, re: "roughmet|rough_met|roughnessmetal(?:lic|ness)?" },
+  { kind: "roughmet", sep: true, re: "rmo|rm" },
+  { kind: "normal", sep: false, re: "normalmap|normals|normal" },
+  { kind: "normal", sep: true, re: "nrm|norm|nmap|nm|bump|bmp|n" },
+  { kind: "rough", sep: false, re: "roughness" },
+  { kind: "rough", sep: true, re: "rough|rgh" },
+  { kind: "metal", sep: false, re: "metalness|metallic" },
+  { kind: "metal", sep: true, re: "metal|mtl" },
+  { kind: "spec", sep: false, re: "specular|glossiness" },
+  { kind: "spec", sep: true, re: "spec|gloss|spc" },
+  { kind: "ao", sep: false, re: "ambientocclusion|occlusion" },
+  { kind: "ao", sep: true, re: "ao" },
+  { kind: "light", sep: false, re: "emissive|selfillum" },
+  { kind: "light", sep: true, re: "lights|light|glow|emis|illum" },
+  { kind: "mask", sep: true, re: "mask|decals|decal|dirt|damage" },
+  { kind: "color", sep: false, re: "basecolor|albedo|diffuse|colour|color" },
+  { kind: "color", sep: true, re: "diff|dif|col|d" }
+].map(r => ({ kind: r.kind, re: new RegExp("^(.*?)[ _.\\-]" + (r.sep ? "+" : "*") + "(?:" + r.re + ")$", "i") }));
+/* a texture with no recognised suffix is the colour/diffuse map */
+function classifyTex(base) {
+  for (const r of SUFFIX_RULES) { const m = r.re.exec(base); if (m && m[1]) return { kind: r.kind, stem: m[1] }; }
+  return { kind: "color", stem: base };
+}
+/* longest run of leading tokens every texture shares — but only taken as an
+   aircraft/livery prefix while each name keeps a non-numeric token of its own,
+   so Main_1 · Main_2 · Main_5 never collapses into 1 · 2 · 5 */
+function detectPrefix(stems) {
+  const toks = stems.map(tokenize);
+  if (!toks.length) return [];
+  let common = toks[0].slice();
+  for (const t of toks) {
+    let i = 0; while (i < common.length && i < t.length && common[i].toLowerCase() === t[i].toLowerCase()) i++;
+    common.length = i;
+    if (!common.length) return [];
+  }
+  while (common.length) {
+    const k = common.length;
+    /* only an aircraft prefix while it leaves at least one real component name
+       behind and never splits a bare number off as the name */
+    if (toks.some(t => t.length > k) && toks.every(t => t.length <= k || !/^\d+$/.test(t[k]))) return common;
+    common.pop();
+  }
+  return [];
+}
+const stripLead = (toks, pre) => (pre.length && toks.length > pre.length && pre.every((p, i) => p.toLowerCase() === toks[i].toLowerCase())) ? toks.slice(pre.length) : toks;
+
+const KIND_LABEL = { color: "Color", normal: "Normal", roughmet: "RoughMet", rough: "Roughness", metal: "Metalness", spec: "Spec", ao: "AO", light: "Lights", mask: "Mask" };
+const EXTRA_KINDS = ["spec", "ao", "light", "mask"];
+const EXTRA_OUT = { spec: "Spec", ao: "AO", light: "Lights", mask: "Mask" };
+
+/* ---- encoders · every one writes the top mip at its original size ---- */
+function encChannel(f, lut, c) {             /* one channel → grayscale PNG */
+  const d = f.data, w = f.w;
+  return encodePNG(w, f.h, 0, (y, row) => { for (let x = 0, p = y * w * 4 + c; x < w; x++, p += 4) row[x] = lut[d[p]]; });
+}
+function encColor(f, keepAlpha, ao, aoStrength) {
+  const d = f.data, w = f.w, a = keepAlpha && hasAlphaIn(d), ch = a ? 4 : 3, s = aoStrength;
+  return encodePNG(w, f.h, a ? 6 : 2, (y, row) => {
+    for (let x = 0, p = y * w * 4, o = 0, i = y * w; x < w; x++, p += 4, o += ch, i++) {
+      if (ao) { const k = 1 - s + s * ao[i] / 255; row[o] = Math.round(d[p] * k); row[o + 1] = Math.round(d[p + 1] * k); row[o + 2] = Math.round(d[p + 2] * k); }
+      else { row[o] = d[p]; row[o + 1] = d[p + 1]; row[o + 2] = d[p + 2]; }
+      if (a) row[o + 3] = d[p + 3];
+    }
+  });
+}
+function encNormal(f, flattenOp) {           /* flattenOp null → byte-for-byte pass-through */
+  const d = f.data, w = f.w, a = hasAlphaIn(d), ch = a ? 4 : 3;
+  const L = flattenOp == null ? null : blendLUTs(flattenOp);
+  return encodePNG(w, f.h, a ? 6 : 2, (y, row) => {
+    for (let x = 0, p = y * w * 4, o = 0; x < w; x++, p += 4, o += ch) {
+      if (L) { row[o] = L[0][d[p]]; row[o + 1] = L[1][d[p + 1]]; row[o + 2] = L[2][d[p + 2]]; }
+      else { row[o] = d[p]; row[o + 1] = d[p + 1]; row[o + 2] = d[p + 2]; }
+      if (a) row[o + 3] = d[p + 3];
+    }
+  });
+}
+
+function makeLivery() {
+  const root = document.querySelector('[data-tool="livery"]');
+  root.innerHTML = `
+  <aside class="panel queue" aria-label="Livery folder">
+    <div class="panel-head"><span class="label">Livery folder</span><span class="mono" data-q="count" style="font-size:12px;color:var(--muted)"></span></div>
+    <label class="drop" for="livery-picker">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5m0-5-2 2m2-2 2 2"/></svg>
+      <strong>Drop a DCS livery folder</strong>
+      <small>or click to choose one · subfolders included</small>
+      <input type="file" id="livery-picker" webkitdirectory directory multiple hidden>
+    </label>
+    <div class="lv-note" data-q="srcInfo"></div>
+    <div class="body stack" style="border-top:1px solid var(--line)">
+      <div class="opt"><span class="label">Component names</span>
+        <label class="switch"><input type="checkbox" id="livery-strip" checked> Strip the shared aircraft prefix</label>
+        <small class="hint" data-q="preInfo">Underscores become spaces — <span class="mono">F16_Main_5_RoughMet.dds</span> → <span class="mono">Main 5</span>.</small>
+        <label class="field"><span>Also strip (optional)</span><input id="livery-pre" type="text" placeholder="e.g. F16C" spellcheck="false" autocomplete="off"></label>
+      </div>
+    </div>
+    <div class="queue-foot"><span data-q="skipInfo"></span><button class="linkish" data-q="clear" type="button">Clear</button></div>
+  </aside>
+  <section class="work">
+    <div class="panel">
+      <div class="panel-head"><span class="label">Detected components</span><span class="mono" data-q="detSum" style="font-size:12px;color:var(--muted)"></span></div>
+      <ul class="comp-list" data-q="comps"></ul>
+    </div>
+    <div class="controls">
+      <div class="panel">
+        <div class="panel-head"><span class="label">Processing</span></div>
+        <div class="body stack">
+          <div class="opt"><span class="label">Roughness · RoughMet green</span>
+            <div class="presets">
+              <button class="btn" data-q="rlTab" type="button">Roughmap tab <span class="mono" data-q="rlTabVals"></span></button>
+              <button class="btn" data-q="rlDcs" type="button">DCS default <span class="mono">91 · 1.10 · 238</span></button>
+            </div>
+            <small class="hint">The green channel through the same levels engine as the Roughmap tab, written as a grayscale PNG.</small>
+          </div>
+          <div class="opt"><span class="label">Metalness · RoughMet blue</span>
+            <div class="presets">${METAL_PRESETS.map((p, i) => `<button class="btn" data-mp="${i}" type="button">${p.label} <span class="mono">${p.L.b} · ${p.L.w}</span></button>`).join("")}</div>
+            <div class="nums">
+              <label class="field"><span>Non-metal below</span><input data-ml="b" type="number" min="0" max="253" step="1" inputmode="numeric"></label>
+              <label class="field"><span>Midtones (gamma)</span><input data-ml="g" type="number" min="0.1" max="9.99" step="0.01" inputmode="decimal"></label>
+              <label class="field"><span>Full metal above</span><input data-ml="w" type="number" min="2" max="255" step="1" inputmode="numeric"></label>
+            </div>
+            <small class="hint">Painted panels stay non-metallic, exposed metal and metal parts stay metallic.</small>
+          </div>
+          <div class="opt"><span class="label">Normal maps</span>
+            <label class="switch"><input type="checkbox" id="livery-flat"> Flatten with the Normal map tab's strength (<span data-q="flatVal">40</span>%)</label>
+            <small class="hint">Off — the default — is DDS → PNG with no channel, orientation or strength change at all.</small>
+          </div>
+          <div class="opt"><span class="label">Color maps</span>
+            <label class="switch"><input type="checkbox" id="livery-alpha" checked> Keep the alpha channel</label>
+            <label class="switch"><input type="checkbox" id="livery-ao"> Multiply the RoughMet red / AO channel into color</label>
+            <label class="switch"><input type="checkbox" id="livery-extras"> Also convert spec · AO · lights · mask textures as-is</label>
+          </div>
+        </div>
+      </div>
+      <div class="panel export">
+        <div class="panel-head"><span class="label">Export</span></div>
+        <div class="body">
+          <div class="stats">
+            <div class="stat"><span>Components</span><b data-q="sComps">–</b></div>
+            <div class="stat"><span>PNGs to write</span><b data-q="sOuts">–</b></div>
+          </div>
+          <label class="field"><span>Bundle name</span><input id="livery-bundle" type="text" value="Converted Livery" spellcheck="false" autocomplete="off"></label>
+          <div class="preview-name" data-q="namePreview"></div>
+          <div class="dest" data-q="dest"></div>
+          <button class="btn primary" data-q="runBtn" type="button">Process livery</button>
+          <div class="progress" data-q="prog" hidden><i></i></div>
+          <div class="log" data-q="log"></div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+  const q = n => root.querySelector(`[data-q="${n}"]`);
+  const L = {
+    key: "livery", entries: [], rootName: "", plan: null, busy: false, dir: null, bundle: "Converted Livery",
+    opts: { stripPrefix: true, extraPrefix: "", metal: { ...METAL_PRESETS[0].L }, roughFrom: "tab", flatten: false, alpha: true, ao: false, aoStrength: 1, extras: false }
+  };
+  const roughLevels = () => L.opts.roughFrom === "dcs" ? PRESET : rough.shared;
+  const setLog = (msg, cls) => { const l = q("log"); l.textContent = msg; l.className = "log" + (cls ? " " + cls : ""); };
+
+  /* ---- detection ---- */
+  function plan() {
+    const texs = [], skipped = [];
+    for (const e of L.entries) {
+      const name = e.path.split("/").pop();
+      if (/^\./.test(name)) continue;
+      if (!/\.(dds|png)$/i.test(name)) { skipped.push(name); continue; }
+      const segs = e.path.split("/").filter(Boolean);
+      const base = name.replace(/\.(dds|png)$/i, "");
+      const { kind, stem } = classifyTex(base);
+      texs.push({ file: e.file, path: e.path, name, base, kind, stem, size: e.file.size, dir: segs.length > 1 ? segs.slice(1, -1).join("/") : "" });
+    }
+    const byDir = new Map();
+    for (const t of texs) { if (!byDir.has(t.dir)) byDir.set(t.dir, []); byDir.get(t.dir).push(t); }
+    const comps = [], prefixes = new Set();
+    const extra = tokenize(L.opts.extraPrefix);
+    for (const [dir, list] of byDir) {
+      const pre = L.opts.stripPrefix ? detectPrefix(list.map(t => t.stem)) : [];
+      if (pre.length) prefixes.add(pre.join(" "));
+      const m = new Map();
+      for (const t of list) {
+        let toks = stripLead(stripLead(tokenize(t.stem), pre), extra);
+        if (!toks.length) toks = tokenize(t.stem);
+        const name = toks.join(" ") || t.stem;
+        const key = dir + "\u0000" + name.toLowerCase();
+        let c = m.get(key);
+        if (!c) {
+          c = { name, dir, maps: {}, extras: [], dupes: [], outs: [] };
+          c.folder = (dir ? dir.split("/").map(safeSeg).join("/") + "/" : "") + safeSeg(name);
+          m.set(key, c); comps.push(c);
+        }
+        if (EXTRA_KINDS.includes(t.kind)) { if (c.extras.some(x => x.kind === t.kind)) c.dupes.push(t); else c.extras.push(t); }
+        else if (c.maps[t.kind]) c.dupes.push(t);
+        else c.maps[t.kind] = t;
+      }
+    }
+    comps.sort((a, b) => natKey(a.dir).localeCompare(natKey(b.dir)) || natKey(a.name).localeCompare(natKey(b.name)));
+    /* one job per source texture, so a RoughMet is decoded once for both maps */
+    const jobs = [];
+    for (const c of comps) {
+      const add = (make, src, label) => { if (src) c.outs.push({ make, src, label, file: safeSeg(c.name) + " " + label + ".png" }); };
+      add("color", c.maps.color, "Color");
+      add("normal", c.maps.normal, "Normal");
+      add("rough", c.maps.roughmet || c.maps.rough, "Rough");
+      add("metal", c.maps.roughmet || c.maps.metal, "Metal");
+      if (L.opts.extras) for (const t of c.extras) add("plain", t, EXTRA_OUT[t.kind]);
+      const bySrc = new Map();
+      for (const o of c.outs) { if (!bySrc.has(o.src)) bySrc.set(o.src, []); bySrc.get(o.src).push(o); }
+      let list = [...bySrc].map(([src, outs]) => ({ comp: c, src, outs }));
+      /* the colour map needs the RoughMet's red channel in hand when AO is baked */
+      if (L.opts.ao) list = list.sort((a, b) => (a.src === c.maps.roughmet ? 0 : 1) - (b.src === c.maps.roughmet ? 0 : 1));
+      if (list.length) list[list.length - 1].last = true;
+      jobs.push(...list);
+    }
+    L.plan = {
+      comps, jobs, skipped, prefixes: [...prefixes], texs: texs.length,
+      bytes: texs.reduce((s, t) => s + t.size, 0),
+      outCount: comps.reduce((s, c) => s + c.outs.length, 0)
+    };
+  }
+
+  function renderPlan() {
+    const ul = q("comps"); ul.textContent = "";
+    const p = L.plan;
+    if (!p || !p.comps.length) {
+      const li = document.createElement("li");
+      li.className = "empty-list";
+      li.textContent = L.entries.length ? "No .dds or .png textures found in that folder." : "Drop a livery folder and every texture in it is sorted by component here before anything is written.";
+      ul.append(li); return;
+    }
+    const html = [];
+    for (const c of p.comps) {
+      const rows = [];
+      const row = (ok, k, f, o, cls) => rows.push(`<div class="r${cls ? " " + cls : ""}"><span class="s">${ok ? "✓" : "—"}</span><span class="k">${esc(k)}</span><span class="f">${esc(f)}</span><span class="o">${esc(o)}</span></div>`);
+      for (const k of ["color", "normal", "roughmet"]) {
+        const t = c.maps[k];
+        if (t) {
+          const outs = c.outs.filter(o => o.src === t && o.make !== "rough" && o.make !== "metal");
+          row(true, KIND_LABEL[k], t.name, outs.map(o => o.file).join(" · "));
+        } else row(false, KIND_LABEL[k], k === "roughmet" ? (c.maps.rough || c.maps.metal ? "separate rough / metal map found" : "not in this folder") : "not in this folder", "", "miss");
+      }
+      for (const mk of ["rough", "metal"]) {
+        const o = c.outs.find(x => x.make === mk);
+        if (o) row(true, "→ " + (mk === "rough" ? "Rough" : "Metal"), (c.maps.roughmet ? (mk === "rough" ? "green channel" : "blue channel") : "from " + o.src.name), o.file, "derived");
+        else row(false, "→ " + (mk === "rough" ? "Rough" : "Metal"), "no source map", "", "derived miss");
+      }
+      for (const t of c.extras) {
+        const o = c.outs.find(x => x.src === t);
+        row(!!o, KIND_LABEL[t.kind], t.name, o ? o.file : "skipped — turn on “also convert”", o ? "" : "miss");
+      }
+      for (const t of c.dupes) row(false, KIND_LABEL[t.kind], t.name, "duplicate — not used", "warn");
+      html.push(`<li class="comp"><div class="comp-h"><b>${esc(c.name)}</b>${c.dir ? `<span class="dirtag">${esc(c.dir)}/</span>` : ""}<span class="dirtag">${c.outs.length} png</span></div><div class="rows">${rows.join("")}</div></li>`);
+    }
+    ul.innerHTML = html.join("");
+  }
+
+  function updateDest() {
+    const d = q("dest");
+    if (L.dir) {
+      d.innerHTML = `Writing into <b></b> · <button class="linkish" type="button">change folder</button>`;
+      d.querySelector("b").textContent = L.dir.name + "/" + safeSeg(L.bundle) + "/";
+      d.querySelector("button").onclick = () => { L.dir = null; updateDest(); };
+    } else d.textContent = canPickFolder
+      ? "You'll pick where it goes when you process; everything lands in a new folder there, never over your source files."
+      : "Saved as one .zip with the component folders inside. The standalone copy opened in Chrome or Edge writes the folders straight to disk.";
+  }
+
+  const mlInputs = [...root.querySelectorAll("input[data-ml]")];
+  function sync() {
+    const p = L.plan, n = L.entries.length;
+    q("count").textContent = n ? `${n} file${n > 1 ? "s" : ""}` : "";
+    q("srcInfo").innerHTML = n
+      ? `Reading <b>${esc(L.rootName || "the dropped files")}</b> · ${p.texs} texture${p.texs === 1 ? "" : "s"} · ${fmtBytes(p.bytes)}<br>Source files are only read — nothing is changed or overwritten.`
+      : "Nothing loaded yet. Source files are only ever read, never changed.";
+    q("skipInfo").textContent = p && p.skipped.length ? `${p.skipped.length} non-texture file${p.skipped.length > 1 ? "s" : ""} ignored` : "";
+    q("clear").hidden = !n;
+    if (p && p.prefixes.length) q("preInfo").innerHTML = `Prefix found: <span class="mono">${esc(p.prefixes.join(", "))}</span> — the rest becomes the component name.`;
+    q("detSum").textContent = p && p.comps.length ? `${p.comps.length} component${p.comps.length > 1 ? "s" : ""} · ${p.outCount} PNG${p.outCount === 1 ? "" : "s"}` : "";
+    q("sComps").textContent = p && p.comps.length ? String(p.comps.length) : "–";
+    q("sOuts").textContent = p && p.outCount ? String(p.outCount) : "–";
+    const bundle = safeSeg(L.bundle);
+    q("namePreview").textContent = p && p.outCount
+      ? `→ ${bundle}/${p.comps[0].folder}/${p.comps[0].outs[0].file}${p.outCount > 1 ? ` and ${p.outCount - 1} more` : ""}`
+      : "Nothing to process yet.";
+    const RL = roughLevels();
+    q("rlTabVals").textContent = `${RL.b} · ${RL.g.toFixed(2)} · ${RL.w}`;
+    q("rlTab").classList.toggle("on", L.opts.roughFrom === "tab");
+    q("rlDcs").classList.toggle("on", L.opts.roughFrom === "dcs");
+    const M = L.opts.metal;
+    mlInputs.forEach(el => { if (document.activeElement !== el) el.value = el.dataset.ml === "g" ? M.g.toFixed(2) : M[el.dataset.ml]; });
+    root.querySelectorAll("[data-mp]").forEach(b => b.classList.toggle("on", sameL(M, METAL_PRESETS[+b.dataset.mp].L)));
+    q("flatVal").textContent = normal.shared.op;
+    const btn = q("runBtn");
+    btn.disabled = L.busy || !p || !p.outCount;
+    btn.textContent = L.busy ? "Processing…" : p && p.outCount ? `Process ${p.outCount} PNG${p.outCount > 1 ? "s" : ""}${canPickFolder ? "…" : " as .zip"}` : "Process livery";
+  }
+  const replan = () => { plan(); renderPlan(); sync(); };
+
+  /* ---- input ---- */
+  L.addPaths = list => {
+    const files = [...list].filter(e => e.file && e.file.size !== undefined);
+    if (!files.length) { setLog("That folder had no readable files.", "bad"); return; }
+    L.entries = files;
+    const segs = files[0].path.split("/");
+    L.rootName = segs.length > 1 ? segs[0] : "";
+    setLog("");
+    replan();
+    if (!L.plan.comps.length) setLog("No .dds or .png textures in there.", "bad");
+  };
+  L.addFiles = list => L.addPaths([...list].map(f => ({ file: f, path: f.webkitRelativePath || f.name })));
+  L.addDrop = dt => {
+    const roots = [...(dt.items || [])].map(i => i.webkitGetAsEntry ? i.webkitGetAsEntry() : null).filter(Boolean);
+    const loose = [...dt.files];
+    if (!roots.length) { L.addFiles(loose); return; }
+    setLog("Reading folder…");
+    (async () => { const out = []; for (const e of roots) await walkEntry(e, "", out); L.addPaths(out); })()
+      .catch(e => setLog("Could not read that folder: " + (e.message || e), "bad"));
+  };
+  root.querySelector("#livery-picker").addEventListener("change", e => { L.addFiles(e.target.files); e.target.value = ""; });
+  q("clear").addEventListener("click", () => { L.entries = []; L.rootName = ""; L.plan = null; setLog(""); renderPlan(); sync(); });
+
+  /* ---- options ---- */
+  root.querySelector("#livery-strip").addEventListener("change", e => { L.opts.stripPrefix = e.target.checked; replan(); });
+  root.querySelector("#livery-pre").addEventListener("input", e => { L.opts.extraPrefix = e.target.value; replan(); });
+  root.querySelector("#livery-extras").addEventListener("change", e => { L.opts.extras = e.target.checked; replan(); });
+  root.querySelector("#livery-flat").addEventListener("change", e => { L.opts.flatten = e.target.checked; sync(); });
+  root.querySelector("#livery-alpha").addEventListener("change", e => { L.opts.alpha = e.target.checked; });
+  root.querySelector("#livery-ao").addEventListener("change", e => { L.opts.ao = e.target.checked; replan(); });
+  root.querySelector("#livery-bundle").addEventListener("input", e => { L.bundle = e.target.value; sync(); updateDest(); });
+  q("rlTab").addEventListener("click", () => { L.opts.roughFrom = "tab"; sync(); });
+  q("rlDcs").addEventListener("click", () => { L.opts.roughFrom = "dcs"; sync(); });
+  root.querySelectorAll("[data-mp]").forEach(b => b.addEventListener("click", () => { L.opts.metal = { ...METAL_PRESETS[+b.dataset.mp].L }; sync(); }));
+  const setML = patch => {
+    const M = Object.assign(L.opts.metal, patch);
+    M.b = Math.round(Math.min(Math.max(M.b, 0), 253)); M.w = Math.round(Math.min(Math.max(M.w, M.b + 2), 255));
+    if (M.b > M.w - 2) M.b = M.w - 2;
+    M.g = Math.min(Math.max(Math.round(M.g * 100) / 100, 0.1), 9.99);
+    sync();
+  };
+  mlInputs.forEach(el => {
+    el.addEventListener("input", () => { const v = parseFloat(el.value); if (Number.isFinite(v)) setML({ [el.dataset.ml]: v }); });
+    el.addEventListener("change", () => sync());
+  });
+
+  /* ---- run ---- */
+  const dirCache = new Map();
+  async function ensureDir(base, segs, key) {
+    let d = base;
+    for (const s of segs) {
+      key += "/" + s;
+      let next = dirCache.get(key);
+      if (!next) { next = await d.getDirectoryHandle(s, { create: true }); dirCache.set(key, next); }
+      d = next;
+    }
+    return d;
+  }
+  q("runBtn").addEventListener("click", async () => {
+    const p = L.plan, o = L.opts;
+    if (L.busy || !p || !p.outCount) return;
+    const prog = q("prog"), bar = prog.firstElementChild;
+    let dir = L.dir, mode = "folder";
+    if (!dir && canPickFolder) {
+      try { dir = await window.showDirectoryPicker({ id: "livery-export", mode: "readwrite" }); L.dir = dir; updateDest(); }
+      catch (e) { if (e && e.name === "AbortError") { setLog("Cancelled."); return; } mode = "download"; }
+    } else if (!dir) mode = "download";
+    const bundle = safeSeg(L.bundle);
+    L.busy = true; sync(); prog.hidden = false; bar.style.width = "0";
+    dirCache.clear();
+    const roughLut = lutFor(roughLevels()), metalLut = lutFor(o.metal);
+    const total = p.outCount, done = [];
+    let made = 0, flat2ch = 0;
+    try {
+      const destRoot = mode === "folder" ? await ensureDir(dir, [bundle], "root") : null;
+      for (const job of p.jobs) {
+        const src = job.src, c = job.comp;
+        setLog(`${c.name} — reading ${src.name} (${made + 1}/${total})`);
+        await tick();
+        const img = /\.dds$/i.test(src.name)
+          ? await decodeDDS(await src.file.arrayBuffer(), "rgba", f => { bar.style.width = ((made + f * job.outs.length) / total * 100).toFixed(1) + "%"; })
+          : await decodeRaster(src.file, "rgba");
+        if (src === c.maps.roughmet && /rebuilt/.test(img.note || "")) flat2ch++;
+        if (o.ao && src === c.maps.roughmet) {
+          const red = new Uint8Array(img.w * img.h);
+          for (let i = 0, q2 = 0; i < red.length; i++, q2 += 4) red[i] = img.data[q2];
+          c.ao = { w: img.w, h: img.h, red };
+        }
+        for (const out of job.outs) {
+          setLog(`${c.name} — writing ${out.file} (${made + 1}/${total})`);
+          await tick();
+          let blob;
+          if (out.make === "rough") blob = await encChannel(img, roughLut, 1);
+          else if (out.make === "metal") blob = await encChannel(img, metalLut, 2);
+          else if (out.make === "normal") blob = await encNormal(img, o.flatten ? normal.shared.op : null);
+          else {
+            const ao = (o.ao && out.make === "color" && c.ao && c.ao.w === img.w && c.ao.h === img.h) ? c.ao.red : null;
+            blob = await encColor(img, o.alpha, ao, o.aoStrength);
+          }
+          const path = c.folder + "/" + out.file;
+          if (mode === "folder") {
+            const segs = path.split("/");
+            const d = await ensureDir(destRoot, segs.slice(0, -1), "bundle");
+            const fh = await d.getFileHandle(segs[segs.length - 1], { create: true }), w = await fh.createWritable();
+            await w.write(blob); await w.close();
+          } else done.push({ name: path, blob });
+          made++;
+          bar.style.width = (made / total * 100).toFixed(1) + "%";
+        }
+        img.data = null;
+        if (job.last) delete c.ao;
+      }
+      const warn = flat2ch ? ` ${flat2ch} RoughMet had only two channels, so its metalness is a rebuild, not source data.` : "";
+      if (mode === "folder") setLog(`Wrote ${made} PNG${made === 1 ? "" : "s"} into ${dir.name}/${bundle}/.${warn}`, "ok");
+      else {
+        const r = await saveBundle(done, bundle, setLog, {});
+        if (r.saved === r.parts) setLog(`Saved ${made} PNGs in ${bundle}.zip${r.parts > 1 ? ` (${r.parts} parts)` : ""}.${warn}`, "ok");
+      }
+    } catch (e) { setLog(`Processing failed: ${e.message || e}`, "bad"); }
+    finally { for (const c of p.comps) delete c.ao; L.busy = false; sync(); setTimeout(() => { prog.hidden = true; }, 600); }
+  });
+
+  L.refresh = () => sync();
+  L.start = () => { renderPlan(); updateDest(); sync(); };
+  return L;
+}
+const livery = makeLivery();
+
+/* ============================================================
    Tabs, drag & drop, boot
    ============================================================ */
-const tools = { rough, normal, convert };
-const ORDER = ["rough", "normal", "convert"];
+const tools = { rough, normal, convert, livery };
+const ORDER = ["rough", "normal", "convert", "livery"];
 const PIPES = {
   rough: [".dds", "decode", "G channel", "levels", ".png"],
   normal: [".dds", "decode", "RGB", "+ flat 128·128·255", ".png"],
-  convert: [".dds", "decode", "RGBA", ".png"]
+  convert: [".dds", "decode", "RGBA", ".png"],
+  livery: ["folder", "detect", "colour · normal", "G → rough", "B → metal", "component folders"]
 };
 let active = "rough";
 function setTab(k) {
@@ -1248,13 +1734,18 @@ let dragDepth = 0;
 document.addEventListener("dragenter", e => { if ([...e.dataTransfer.types].includes("Files")) { dragDepth++; document.body.classList.add("dragging"); } });
 document.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dragging"); } });
 document.addEventListener("dragover", e => e.preventDefault());
-document.addEventListener("drop", e => { e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging"); if (e.dataTransfer.files.length) tools[active].addFiles(e.dataTransfer.files); });
+document.addEventListener("drop", e => {
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging");
+  const t = tools[active];
+  if (t.addDrop) t.addDrop(e.dataTransfer);               /* folders, not just files */
+  else if (e.dataTransfer.files.length) t.addFiles(e.dataTransfer.files);
+});
 const redraw = () => tools[active].refresh();
 window.addEventListener("resize", redraw);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
 new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
-rough.start(); normal.start(); convert.start();
+rough.start(); normal.start(); convert.start(); livery.start();
 let saved = "rough"; try { saved = localStorage.getItem("tl-tab") || "rough"; } catch (e) {}
 setTab(tools[saved] ? saved : "rough");
 })();
