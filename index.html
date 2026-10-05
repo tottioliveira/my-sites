@@ -155,6 +155,8 @@ button,input{font:inherit;color:inherit}
 .h:focus-visible::before{background:var(--accent)}
 .nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}
 .nums.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.nums.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:560px){.nums.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 /* ---------- normal strength ---------- */
 .fill-row{display:flex;gap:12px;align-items:center;padding:10px 12px;background:var(--raised);border:1px solid var(--line);border-radius:5px}
@@ -220,6 +222,7 @@ button,input{font:inherit;color:inherit}
   <div class="brand"><h1>Totti's <b>Liveries</b></h1></div>
   <nav class="tabs" role="tablist" aria-label="Tools">
     <button class="tab" role="tab" id="tab-rough" data-tab="rough" aria-selected="true" type="button">Roughmap</button>
+    <button class="tab" role="tab" id="tab-metal" data-tab="metal" aria-selected="false" type="button">Metal map</button>
     <button class="tab" role="tab" id="tab-normal" data-tab="normal" aria-selected="false" type="button">Normal map</button>
     <button class="tab" role="tab" id="tab-convert" data-tab="convert" aria-selected="false" type="button">DDS → PNG</button>
     <button class="tab" role="tab" id="tab-livery" data-tab="livery" aria-selected="false" type="button">Livery folder</button>
@@ -229,6 +232,7 @@ button,input{font:inherit;color:inherit}
 </header>
 
 <main class="shell" data-tool="rough" role="tabpanel" aria-labelledby="tab-rough"></main>
+<main class="shell" data-tool="metal" role="tabpanel" aria-labelledby="tab-metal" hidden></main>
 <main class="shell" data-tool="normal" role="tabpanel" aria-labelledby="tab-normal" hidden></main>
 <main class="shell" data-tool="convert" role="tabpanel" aria-labelledby="tab-convert" hidden></main>
 <main class="shell" data-tool="livery" role="tabpanel" aria-labelledby="tab-livery" hidden></main>
@@ -334,7 +338,8 @@ function reconZ(B) { for (let p = 0; p < 16; p++) { const q = p * 4; B[q + 2] = 
 const DXGI_NAMES = {70:"BC1",71:"BC1",72:"BC1 sRGB",73:"BC2",74:"BC2",75:"BC2 sRGB",76:"BC3",77:"BC3",78:"BC3 sRGB",79:"BC4",80:"BC4",81:"BC4 signed",82:"BC5",83:"BC5",84:"BC5 signed",97:"BC7",98:"BC7",99:"BC7 sRGB",27:"RGBA8",28:"RGBA8",29:"RGBA8 sRGB",87:"BGRA8",88:"BGRX8",90:"BGRA8",91:"BGRA8 sRGB",92:"BGRX8",93:"BGRX8 sRGB",61:"R8",49:"RG8",65:"A8",94:"BC6H",95:"BC6H",96:"BC6H"};
 const tick = () => new Promise(r => setTimeout(r, 0));
 
-/* want: "g" → Uint8Array(w*h) green channel · "rgba" → Uint8Array(w*h*4) */
+/* want: "g" / "b" → Uint8Array(w*h) green / blue channel · "rgba" → Uint8Array(w*h*4) */
+const CH1 = { g: 1, b: 2 };
 function ddsInfo(u8, dv, want) {
   if (u8.length < 128 || dv.getUint32(0, true) !== 0x20534444) throw new Error("Not a DDS file (missing 'DDS ' header)");
   const h = dv.getUint32(12, true), w = dv.getUint32(16, true);
@@ -386,7 +391,7 @@ async function peekDDS(file, want) {
 async function decodeDDS(buf, want, onProgress) {
   const u8 = new Uint8Array(buf), dv = new DataView(buf);
   const { w, h, off, kind, fmt, note, recon, bits } = ddsInfo(u8, dv, want);
-  const G = want === "g", out = new Uint8Array(w * h * (G ? 1 : 4));
+  const G = want in CH1, ci = CH1[want], out = new Uint8Array(w * h * (G ? 1 : 4));
   const B = new Uint8Array(64);
   let t = performance.now();
   if (typeof kind === "string") {
@@ -410,7 +415,7 @@ async function decodeDDS(buf, want, onProgress) {
           for (let px = 0; px < 4; px++) {
             const x = x0 + px; if (x >= w) break;
             const s = (py * 4 + px) * 4, d = y * w + x;
-            if (G) out[d] = B[s + 1];
+            if (G) out[d] = B[s + ci];
             else { const d4 = d * 4; out[d4] = B[s]; out[d4 + 1] = B[s + 1]; out[d4 + 2] = B[s + 2]; out[d4 + 3] = B[s + 3]; }
           }
         }
@@ -432,7 +437,7 @@ async function decodeDDS(buf, want, onProgress) {
         } else for (let c = 0; c < 4; c++) { const i = kind.idx[c]; px[c] = i >= 0 ? u8[o + i] : (c === 3 ? 255 : 0); }
         if (recon && !G) px[2] = ZLUT[px[0] * 256 + px[1]];
         const d = y * w + x;
-        if (G) out[d] = px[1]; else { const d4 = d * 4; out[d4] = px[0]; out[d4 + 1] = px[1]; out[d4 + 2] = px[2]; out[d4 + 3] = px[3]; }
+        if (G) out[d] = px[ci]; else { const d4 = d * 4; out[d4] = px[0]; out[d4 + 1] = px[1]; out[d4 + 2] = px[2]; out[d4 + 3] = px[3]; }
       }
       if (performance.now() - t > 40) { onProgress(y / h); await tick(); t = performance.now(); }
     }
@@ -445,7 +450,7 @@ async function decodeRaster(file, want) {
   const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(bmp, 0, 0);
   const d = x.getImageData(0, 0, c.width, c.height).data;
   let out;
-  if (want === "g") { out = new Uint8Array(c.width * c.height); for (let i = 0, j = 1; i < out.length; i++, j += 4) out[i] = d[j]; }
+  if (want in CH1) { out = new Uint8Array(c.width * c.height); for (let i = 0, j = CH1[want]; i < out.length; i++, j += 4) out[i] = d[j]; }
   else out = new Uint8Array(d.buffer.slice(0));
   return { w: c.width, h: c.height, data: out, fmt: "PNG", note: "" };
 }
@@ -637,7 +642,7 @@ function makeTool(key, cfg) {
 
   function prepare(f) {
     const max = 1024, fac = Math.max(1, Math.ceil(Math.max(f.w, f.h) / max));
-    const pw = Math.max(1, Math.floor(f.w / fac)), ph = Math.max(1, Math.floor(f.h / fac)), ch = cfg.want === "g" ? 1 : 4;
+    const pw = Math.max(1, Math.floor(f.w / fac)), ph = Math.max(1, Math.floor(f.h / fac)), ch = cfg.want in CH1 ? 1 : 4;
     const pd = new Uint8Array(pw * ph * ch);
     if (fac === 1) pd.set(f.data);
     else {
@@ -932,6 +937,18 @@ function makeTool(key, cfg) {
    ============================================================ */
 const PRESET = { b: 91, g: 1.10, w: 238, ob: 0, ow: 255 };
 const IDENT = { b: 0, g: 1, w: 255, ob: 0, ow: 255 };
+/* Blue channel in a DCS RoughMet is rarely a clean 0/1 split — painted panels
+   carry 20–90 and only bare metal sits high. These levels (the same engine as
+   the Roughmap and Metal map tabs) drop the weak information to 0 so the airframe doesn't read
+   as metal, darken the midtones, and cap the output so even bare metal stays
+   short of a mirror finish. Ordered least → most metal. */
+const METAL_PRESETS = [
+  { label: "Very weak", L: { b: 160, g: 0.70, w: 255, ob: 0, ow: 115 } },
+  { label: "Weak", L: { b: 140, g: 0.80, w: 240, ob: 0, ow: 155 } },
+  { label: "Medium", L: { b: 120, g: 0.90, w: 230, ob: 0, ow: 190 } },
+  { label: "Strong", L: { b: 100, g: 1, w: 215, ob: 0, ow: 225 } }
+];
+const METAL_DEFAULT = 1;
 function lutFor(L) {
   const lut = new Uint8Array(256), span = Math.max(1, L.w - L.b), inv = 1 / L.g;
   for (let i = 0; i < 256; i++) { let v = (i - L.b) / span; v = v < 0 ? 0 : v > 1 ? 1 : v; lut[i] = Math.round(L.ob + Math.pow(v, inv) * (L.ow - L.ob)); }
@@ -939,42 +956,39 @@ function lutFor(L) {
 }
 const sameL = (a, b) => a.b === b.b && Math.abs(a.g - b.g) < 1e-6 && a.w === b.w && a.ob === b.ob && a.ow === b.ow;
 
-const rough = makeTool("rough", {
-  noun: "Roughmap", listLabel: "Roughmaps", dropTitle: "Drop roughmet .dds files", want: "g", suffix: "_rough", zipName: "roughmaps",
-  srcTag: "Green channel <em>· source</em>", outTag: "Levels <em>· result</em>", emptyText: "Drop a roughmet .dds to begin",
-  defaults: PRESET,
-  example() {
-    const n = 512, H = exampleField(n), G = new Uint8Array(n * n);
-    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-      const scratch = Math.abs(((x * 0.8 + y * 0.35) % 97) - 48) < 0.6 && vnoise(x / 30, y / 30) > .55 ? 30 : 0;
-      const wear = vnoise(x / 90 + 7, y / 90) > .62 ? 22 : 0;
-      G[y * n + x] = Math.max(0, Math.min(255, Math.round(120 + H[y * n + x] * 70 + scratch + wear)));
-    }
-    return { name: "example_roughmet.dds", w: n, h: n, data: G, fmt: "BC7 · example", note: "" };
-  },
+/* One levels tool per RoughMet channel. o.ch is the channel letter ("g" / "b"),
+   o.presets the buttons above the levels, o.hint an optional line under them. */
+const CH_NAME = { g: "Green", b: "Blue" }, CH_SHIFT = { g: 8, b: 16 };
+function levelsTool(key, o) {
+  const name = CH_NAME[o.ch], shift = CH_SHIFT[o.ch], ci = CH1[o.ch];
+  return makeTool(key, {
+  noun: o.noun, listLabel: o.listLabel, dropTitle: "Drop roughmet .dds files", want: o.ch, suffix: o.suffix, zipName: o.zipName,
+  srcTag: `${name} channel <em>· source</em>`, outTag: "Levels <em>· result</em>", emptyText: "Drop a roughmet .dds to begin",
+  defaults: o.defaults,
+  example: o.example,
   prepare(f) { const h = new Uint32Array(256); for (let i = 0; i < f.data.length; i++) h[f.data[i]]++; f.hist = h; },
   frame(T, f) {
-    const lut = lutFor(T.params(f)), gray = T.out !== "green", S = new Uint32Array(256), O = new Uint32Array(256);
-    for (let v = 0; v < 256; v++) { const u = lut[v]; S[v] = 0xff000000 | (v << 16) | (v << 8) | v; O[v] = gray ? (0xff000000 | (u << 16) | (u << 8) | u) : (0xff000000 | (u << 8)); }
+    const lut = lutFor(T.params(f)), gray = T.out !== "chan", S = new Uint32Array(256), O = new Uint32Array(256);
+    for (let v = 0; v < 256; v++) { const u = lut[v]; S[v] = 0xff000000 | (v << 16) | (v << 8) | v; O[v] = gray ? (0xff000000 | (u << 16) | (u << 8) | u) : (0xff000000 | (u << shift)); }
     return { src: (d, i) => S[d[i]], out: (d, i) => O[d[i]] };
   },
-  readout(T, f, i) { const v = f.data[i]; return `<span>G <b>${v}</b> → <b>${lutFor(T.params(f))[v]}</b></span>`; },
+  readout(T, f, i) { const v = f.data[i]; return `<span>${o.ch.toUpperCase()} <b>${v}</b> → <b>${lutFor(T.params(f))[v]}</b></span>`; },
   encode(T, f) {
     const lut = lutFor(T.params(f)), g = f.data, w = f.w;
-    if (T.out === "green") return encodePNG(w, f.h, 2, (y, row) => { for (let x = 0, o = y * w; x < w; x++) { row[x * 3] = 0; row[x * 3 + 1] = lut[g[o + x]]; row[x * 3 + 2] = 0; } });
+    if (T.out === "chan") return encodePNG(w, f.h, 2, (y, row) => { row.fill(0); for (let x = 0, o = y * w; x < w; x++) row[x * 3 + ci] = lut[g[o + x]]; });
     return encodePNG(w, f.h, 0, (y, row) => { for (let x = 0, o = y * w; x < w; x++) row[x] = lut[g[o + x]]; });
   },
   exportExtraHTML: () => `<div class="opt"><span class="label">PNG channels</span>
-      <div class="seg" role="group" aria-label="Output channels"><button type="button" data-q="outGray" aria-pressed="true">Grayscale</button><button type="button" data-q="outGreen" aria-pressed="false">Green only</button></div></div>`,
+      <div class="seg" role="group" aria-label="Output channels"><button type="button" data-q="outGray" aria-pressed="true">Grayscale</button><button type="button" data-q="outChan" aria-pressed="false">${name} only</button></div></div>`,
   controlsHTML: k => `
   <div class="panel">
     <div class="panel-head"><span class="label">Levels</span>
       <div class="presets">
-        <button class="btn" data-q="presetDcs" type="button">DCS default <span class="mono">91 · 1.10 · 238</span></button>
+        ${o.presets.map((p, i) => `<button class="btn" data-pi="${i}" type="button">${p.label} <span class="mono">${p.mono}</span></button>`).join("")}
         <button class="btn" data-q="presetReset" type="button">Reset</button>
       </div>
     </div>
-    <div class="body stack">
+    <div class="body stack">${o.hint ? `\n      <small class="hint">${o.hint}</small>` : ""}
       <div>
         <div class="sub-h"><span class="label">Input levels</span><label class="switch"><input type="checkbox" id="${k}-linked" checked> Same levels for all files</label></div>
         <div class="hist-wrap">
@@ -1011,7 +1025,7 @@ const rough = makeTool("rough", {
   initControls(T) {
     const q = T.q, root = T.root;
     T.out = "gray";
-    T.seg(q("outGray"), q("outGreen"), i => { T.out = i ? "green" : "gray"; T.renderOut(); });
+    T.seg(q("outGray"), q("outChan"), i => { T.out = i ? "chan" : "gray"; T.renderOut(); });
     const inputs = [...root.querySelectorAll("input[data-k]")];
     const setL = patch => {
       const L = T.params(T.cur); Object.assign(L, patch);
@@ -1043,9 +1057,9 @@ const rough = makeTool("rough", {
         });
       });
     });
-    q("presetDcs").addEventListener("click", () => setL({ ...PRESET }));
+    root.querySelectorAll("[data-pi]").forEach(b => b.addEventListener("click", () => setL({ ...o.presets[+b.dataset.pi].L })));
     q("presetReset").addEventListener("click", () => setL({ ...IDENT }));
-    root.querySelector("#rough-linked").addEventListener("change", e => {
+    root.querySelector(`#${key}-linked`).addEventListener("change", e => {
       if (!e.target.checked) T.files.forEach(f => f.params = { ...T.shared }); else if (T.cur) T.shared = { ...T.cur.params };
       T.linked = e.target.checked; T.refresh();
     });
@@ -1067,10 +1081,45 @@ const rough = makeTool("rough", {
         inputs.forEach(el => { if (document.activeElement !== el) el.value = el.dataset.k === "g" ? L.g.toFixed(2) : L[el.dataset.k]; });
         const pos = { b: L.b, g: L.b + (L.w - L.b) * Math.pow(0.5, L.g), w: L.w, ob: L.ob, ow: L.ow };
         root.querySelectorAll(".h").forEach(h => { const k = h.dataset.k; h.style.left = (pos[k] / 255 * 100) + "%"; h.setAttribute("aria-valuetext", k === "g" ? L.g.toFixed(2) : String(L[k])); });
-        q("presetDcs").classList.toggle("on", sameL(L, PRESET));
+        root.querySelectorAll("[data-pi]").forEach(b => b.classList.toggle("on", sameL(L, o.presets[+b.dataset.pi].L)));
         drawHist();
       }
     };
+  }
+});
+}
+
+function roughExample() {
+    const n = 512, H = exampleField(n), G = new Uint8Array(n * n);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const scratch = Math.abs(((x * 0.8 + y * 0.35) % 97) - 48) < 0.6 && vnoise(x / 30, y / 30) > .55 ? 30 : 0;
+      const wear = vnoise(x / 90 + 7, y / 90) > .62 ? 22 : 0;
+      G[y * n + x] = Math.max(0, Math.min(255, Math.round(120 + H[y * n + x] * 70 + scratch + wear)));
+    }
+    return { name: "example_roughmet.dds", w: n, h: n, data: G, fmt: "BC7 · example", note: "" };
+  }
+
+const rough = levelsTool("rough", {
+  ch: "g", noun: "Roughmap", listLabel: "Roughmaps", suffix: "_rough", zipName: "roughmaps",
+  defaults: PRESET, example: roughExample,
+  presets: [{ label: "DCS default", mono: "91 · 1.10 · 238", L: PRESET }]
+});
+
+/* ============================================================
+   Metal map tool — blue channel through the same levels
+   ============================================================ */
+const metal = levelsTool("metal", {
+  ch: "b", noun: "Metal map", listLabel: "Metal maps", suffix: "_metal", zipName: "metalmaps",
+  defaults: METAL_PRESETS[METAL_DEFAULT].L,
+  presets: METAL_PRESETS.map(p => ({ ...p, mono: `max ${Math.round(p.L.ow / 2.55)}%` })),
+  hint: "Very weak = least metallic, Strong = most metallic. Start with Weak; go up only if bare-metal parts look dull in game. Output white caps the shiniest metal.",
+  example() {
+    const n = 512, H = exampleField(n), B = new Uint8Array(n * n);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const bare = vnoise(x / 70 + 3, y / 70) > .66 || (y > 440 && x % 128 < 96);   /* worn patches + a metal strip */
+      B[y * n + x] = Math.max(0, Math.min(255, Math.round((bare ? 205 : 55) + H[y * n + x] * 35)));
+    }
+    return { name: "example_roughmet.dds", w: n, h: n, data: B, fmt: "BC7 · example", note: "" };
   }
 });
 
@@ -1268,15 +1317,6 @@ const safeSeg = s => (s.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").replace(/[. ]+
 const tokenize = s => s.split(/[ _\-.]+/).filter(Boolean);
 const natKey = s => s.toLowerCase().replace(/\d+/g, d => d.padStart(8, "0"));
 
-/* Blue channel in a DCS RoughMet is rarely a clean 0/1 split — painted panels
-   carry 20–90 and only bare metal sits high. These levels (the same engine as
-   the Roughmap tab) drop the weak information to 0 so the airframe doesn't read
-   as metal, while keeping exposed metal and metal parts fully metallic. */
-const METAL_PRESETS = [
-  { label: "Balanced", L: { b: 96, g: 1, w: 192, ob: 0, ow: 255 } },
-  { label: "Strict", L: { b: 128, g: 1, w: 224, ob: 0, ow: 255 } },
-  { label: "Faithful", L: { ...IDENT } }
-];
 
 /* DCS / mod filename suffixes → what the texture is.
    sep:true needs a _ - . or space in front, so "Tornado" can't read as "…_AO". */
@@ -1396,13 +1436,15 @@ function makeLivery() {
             <small class="hint">The green channel through the same levels engine as the Roughmap tab, written as a grayscale PNG.</small>
           </div>
           <div class="opt"><span class="label">Metalness · RoughMet blue</span>
-            <div class="presets">${METAL_PRESETS.map((p, i) => `<button class="btn" data-mp="${i}" type="button">${p.label} <span class="mono">${p.L.b} · ${p.L.w}</span></button>`).join("")}</div>
-            <div class="nums">
+            <div class="presets"><button class="btn" data-q="mlTab" type="button">Metal map tab <span class="mono" data-q="mlTabVals"></span></button>${METAL_PRESETS.map((p, i) => `<button class="btn" data-mp="${i}" type="button">${p.label} <span class="mono">max ${Math.round(p.L.ow / 2.55)}%</span></button>`).join("")}</div>
+            <small class="hint">Very weak = least metallic, Strong = most metallic. Start with Weak; go up only if bare-metal parts look dull in game.</small>
+            <div class="nums four">
               <label class="field"><span>Non-metal below</span><input data-ml="b" type="number" min="0" max="253" step="1" inputmode="numeric"></label>
               <label class="field"><span>Midtones (gamma)</span><input data-ml="g" type="number" min="0.1" max="9.99" step="0.01" inputmode="decimal"></label>
               <label class="field"><span>Full metal above</span><input data-ml="w" type="number" min="2" max="255" step="1" inputmode="numeric"></label>
+              <label class="field"><span>Max metalness</span><input data-ml="ow" type="number" min="0" max="255" step="1" inputmode="numeric"></label>
             </div>
-            <small class="hint">Painted panels stay non-metallic, exposed metal and metal parts stay metallic.</small>
+            <small class="hint">Values below "Non-metal below" become paint (0). A lower midtone gamma or max metalness makes everything less shiny.</small>
           </div>
           <div class="opt"><span class="label">Normal maps</span>
             <label class="switch"><input type="checkbox" id="livery-flat"> Flatten with the Normal map tab's strength (<span data-q="flatVal">40</span>%)</label>
@@ -1435,9 +1477,10 @@ function makeLivery() {
   const q = n => root.querySelector(`[data-q="${n}"]`);
   const L = {
     key: "livery", entries: [], rootName: "", plan: null, busy: false, dir: null, bundle: "Converted Livery",
-    opts: { stripPrefix: true, extraPrefix: "", metal: { ...METAL_PRESETS[0].L }, roughFrom: "tab", flatten: false, alpha: true, ao: false, aoStrength: 1, extras: false }
+    opts: { stripPrefix: true, extraPrefix: "", metal: { ...METAL_PRESETS[METAL_DEFAULT].L }, metalFrom: "tab", roughFrom: "tab", flatten: false, alpha: true, ao: false, aoStrength: 1, extras: false }
   };
   const roughLevels = () => L.opts.roughFrom === "dcs" ? PRESET : rough.shared;
+  const metalLevels = () => L.opts.metalFrom === "tab" ? metal.shared : L.opts.metal;
   const setLog = (msg, cls) => { const l = q("log"); l.textContent = msg; l.className = "log" + (cls ? " " + cls : ""); };
 
   /* ---- detection ---- */
@@ -1568,9 +1611,11 @@ function makeLivery() {
     q("rlTabVals").textContent = `${RL.b} · ${RL.g.toFixed(2)} · ${RL.w}`;
     q("rlTab").classList.toggle("on", L.opts.roughFrom === "tab");
     q("rlDcs").classList.toggle("on", L.opts.roughFrom === "dcs");
-    const M = L.opts.metal;
+    const M = metalLevels(), mTab = L.opts.metalFrom === "tab";
+    q("mlTabVals").textContent = `max ${Math.round(metal.shared.ow / 2.55)}%`;
+    q("mlTab").classList.toggle("on", mTab);
     mlInputs.forEach(el => { if (document.activeElement !== el) el.value = el.dataset.ml === "g" ? M.g.toFixed(2) : M[el.dataset.ml]; });
-    root.querySelectorAll("[data-mp]").forEach(b => b.classList.toggle("on", sameL(M, METAL_PRESETS[+b.dataset.mp].L)));
+    root.querySelectorAll("[data-mp]").forEach(b => b.classList.toggle("on", !mTab && sameL(M, METAL_PRESETS[+b.dataset.mp].L)));
     q("flatVal").textContent = normal.shared.op;
     const btn = q("runBtn");
     btn.disabled = L.busy || !p || !p.outCount;
@@ -1611,12 +1656,15 @@ function makeLivery() {
   root.querySelector("#livery-bundle").addEventListener("input", e => { L.bundle = e.target.value; sync(); updateDest(); });
   q("rlTab").addEventListener("click", () => { L.opts.roughFrom = "tab"; sync(); });
   q("rlDcs").addEventListener("click", () => { L.opts.roughFrom = "dcs"; sync(); });
-  root.querySelectorAll("[data-mp]").forEach(b => b.addEventListener("click", () => { L.opts.metal = { ...METAL_PRESETS[+b.dataset.mp].L }; sync(); }));
+  root.querySelectorAll("[data-mp]").forEach(b => b.addEventListener("click", () => { L.opts.metalFrom = "own"; L.opts.metal = { ...METAL_PRESETS[+b.dataset.mp].L }; sync(); }));
+  q("mlTab").addEventListener("click", () => { L.opts.metalFrom = "tab"; sync(); });
   const setML = patch => {
+    if (L.opts.metalFrom === "tab") { L.opts.metal = { ...metal.shared }; L.opts.metalFrom = "own"; }   /* typing forks a copy */
     const M = Object.assign(L.opts.metal, patch);
     M.b = Math.round(Math.min(Math.max(M.b, 0), 253)); M.w = Math.round(Math.min(Math.max(M.w, M.b + 2), 255));
     if (M.b > M.w - 2) M.b = M.w - 2;
     M.g = Math.min(Math.max(Math.round(M.g * 100) / 100, 0.1), 9.99);
+    M.ow = Math.round(Math.min(Math.max(M.ow, 0), 255));
     sync();
   };
   mlInputs.forEach(el => {
@@ -1648,7 +1696,7 @@ function makeLivery() {
     const bundle = safeSeg(L.bundle);
     L.busy = true; sync(); prog.hidden = false; bar.style.width = "0";
     dirCache.clear();
-    const roughLut = lutFor(roughLevels()), metalLut = lutFor(o.metal);
+    const roughLut = lutFor(roughLevels()), metalLut = lutFor(metalLevels());
     const total = p.outCount, done = [];
     let made = 0, flat2ch = 0;
     try {
@@ -1709,10 +1757,11 @@ const livery = makeLivery();
 /* ============================================================
    Tabs, drag & drop, boot
    ============================================================ */
-const tools = { rough, normal, convert, livery };
-const ORDER = ["rough", "normal", "convert", "livery"];
+const tools = { rough, metal, normal, convert, livery };
+const ORDER = ["rough", "metal", "normal", "convert", "livery"];
 const PIPES = {
   rough: [".dds", "decode", "G channel", "levels", ".png"],
+  metal: [".dds", "decode", "B channel", "levels", ".png"],
   normal: [".dds", "decode", "RGB", "+ flat 128·128·255", ".png"],
   convert: [".dds", "decode", "RGBA", ".png"],
   livery: ["folder", "detect", "colour · normal", "G → rough", "B → metal", "component folders"]
@@ -1745,7 +1794,7 @@ window.addEventListener("resize", redraw);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
 new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
-rough.start(); normal.start(); convert.start(); livery.start();
+rough.start(); metal.start(); normal.start(); convert.start(); livery.start();
 let saved = "rough"; try { saved = localStorage.getItem("tl-tab") || "rough"; } catch (e) {}
 setTab(tools[saved] ? saved : "rough");
 })();
